@@ -163,6 +163,29 @@ is and to answer "you had paired IR, why not use it?".
 
 ---
 
+## 3b. Baselines are code in this repo, not quoted numbers
+
+`models/baselines/csp_baseline.py`, `configs/baselines/`.
+
+P1-6 claims fairness through a unified protocol. That claim is only credible if
+the baselines are actually trained here. Published YOLO numbers come with COCO
+pretraining, different input sizes and different NMS settings; comparing against
+them proves nothing about the architecture.
+
+Each baseline swaps **only the feature extractor** and reuses LiteGTR's neck,
+head, losses, assigner, augmentation and schedule unchanged
+(`models/backbone/builder.py` is the seam). `tests/test_baselines.py` asserts
+the shared path — same head type, same `reg_max`, same assigner, same strides —
+so a baseline cannot silently drift out of the protocol.
+
+| config | what it isolates |
+|---|---|
+| `baselines/csp_n.yaml` | YOLOv8n-class extractor vs TinyNeXt, token path off |
+| `baselines/csp_t.yaml` | smaller CSP, the Edge-S comparison point |
+| `baselines/tinynext_no_token.yaml` | separates the backbone's gain from the token path's gain |
+
+---
+
 ## 4. P2 — engineering
 
 | | |
@@ -171,6 +194,9 @@ is and to answer "you had paired IR, why not use it?".
 | **P2-12** | `neck.use_fpn` defaults **true**. Pure 1×1 projection does no cross-scale fusion and costs small-object AP; `configs/ablation/no_fpn.yaml` measures it. |
 | **P2-13** | `models/build.py` — YAML-driven construction with deep `_base_` merging. Ablations flip a key; no code is edited. |
 | **P2-14** | `tools/run_seeds.py` — 3 seeds, reports mean ± std. |
+| **P2-15** | `datasets/builder.py` — dataset factory extracted, so building VisDrone no longer imports the DroneVehicle module. |
+| **P2-16** | `utils/boxes.py` — letterbox inverse. Internal evaluation is self-consistent in letterboxed space, but submissions and qualitative overlays need original pixels; getting this wrong fails silently. |
+| **P2-17** | `engine/ema.py` — weight EMA, kept clearly separate from the token-routing EMA teacher. Both are ablated independently. |
 
 **Windows**: `pathlib` throughout, no shell dependencies, dataset roots live in
 YAML, every entry point is `if __name__ == "__main__"` guarded for spawn-based
@@ -181,7 +207,9 @@ DataLoader workers.
 ## 5. Build order
 
 1. `tools/profile.py` — **done**, numbers above.
-2. Lock token/projection dims against the measured budget.
+2. Lock token/projection dims against the measured budget, and run
+   `tools/analyze_dataset.py` so the budget sweep starts from your data's real
+   objects-per-image distribution rather than a quoted average.
 3. Geometry writeback + EMA alignment maths — **done** (P1-7, P0-4).
 4. Data adaptation, then **look at `tools/visualize_labels.py` output**.
 5. Skeleton + unit tests + ONNX smoke — **done**.

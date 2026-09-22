@@ -19,9 +19,11 @@ class CheckpointManager:
     def _better(self, value: float) -> bool:
         return value > self.best if self.mode == "max" else value < self.best
 
-    def save(self, model, optimizer, scheduler, epoch: int, metrics: dict, cfg: dict) -> bool:
+    def save(self, model, optimizer, scheduler, epoch: int, metrics: dict, cfg: dict,
+             model_ema=None) -> bool:
         payload = {
             "model": model.state_dict(),
+            "model_ema": model_ema.state_dict() if model_ema is not None else None,
             "optimizer": optimizer.state_dict() if optimizer else None,
             "scheduler": scheduler.state_dict() if scheduler else None,
             "epoch": epoch,
@@ -39,9 +41,12 @@ class CheckpointManager:
         return improved
 
     @staticmethod
-    def load(path: str | Path, model, optimizer=None, scheduler=None, map_location="cpu") -> dict:
+    def load(path: str | Path, model, optimizer=None, scheduler=None, map_location="cpu",
+             prefer_ema: bool = True) -> dict:
+        """Loads EMA weights when present -- they are what training evaluated."""
         ck = torch.load(path, map_location=map_location, weights_only=False)
-        model.load_state_dict(ck["model"], strict=False)
+        sd = ck.get("model_ema") if (prefer_ema and ck.get("model_ema")) else ck["model"]
+        model.load_state_dict(sd, strict=False)
         if optimizer and ck.get("optimizer"):
             optimizer.load_state_dict(ck["optimizer"])
         if scheduler and ck.get("scheduler"):

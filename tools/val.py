@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from datasets.base import collate_fn  # noqa: E402
-from datasets.dronevehicle import build_dataset  # noqa: E402
+from datasets.builder import build_dataset  # noqa: E402
 from engine.checkpoint import CheckpointManager  # noqa: E402
 from engine.evaluator import evaluate  # noqa: E402
 from models.build import build_model, load_config  # noqa: E402

@@ -1,0 +1,10 @@
+# Smaller CSP baseline, the comparison point for LiteGTR-Edge-S.
+_base_: [csp_n.yaml]
+model:
+  backbone:
+    channels: [24, 48, 96, 192]
+    depths: [1, 1, 2, 1]
+  neck:
+    channels: 48
+  head:
+    stacked_convs: 1

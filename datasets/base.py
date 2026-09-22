@@ -9,7 +9,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from datasets.transforms import build_train_transforms, build_val_transforms, mosaic4
+from datasets.transforms import (LetterBox, build_train_transforms, build_val_transforms,
+                                 mosaic4)
 
 
 class DetectionDataset(Dataset):
@@ -22,6 +23,9 @@ class DetectionDataset(Dataset):
         self.train = train
         self.mosaic_prob = mosaic_prob if train else 0.0
         self.tf = build_train_transforms(img_size) if train else build_val_transforms(img_size)
+        # mosaic already emits an img_size canvas, so the letterbox step is skipped
+        # for that branch -- everything else in the chain still applies.
+        self.post_mosaic = [t for t in self.tf.transforms if not isinstance(t, LetterBox)]
 
     # --- to be provided by subclasses -------------------------------------
     def load_raw(self, index: int):
@@ -35,13 +39,14 @@ class DetectionDataset(Dataset):
         if self.mosaic_prob > 0 and random.random() < self.mosaic_prob:
             idxs = [index] + [random.randrange(len(self)) for _ in range(3)]
             samples = []
-            meta = None
             for i in idxs:
                 img, boxes, labels, m = self.load_raw(i)
                 samples.append((img, boxes, labels))
-                meta = meta or m
+                if i == index:
+                    meta = m
             img, boxes, labels = mosaic4(samples, self.img_size)
-            img, boxes = self.tf.transforms[0](img, boxes) if self.train else (img, boxes)
+            for t in self.post_mosaic:
+                img, boxes = t(img, boxes)
         else:
             img, boxes, labels, meta = self.load_raw(index)
             n_before = len(boxes)

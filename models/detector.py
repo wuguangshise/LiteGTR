@@ -25,7 +25,7 @@ from losses.dfl import DistributionFocalLoss
 from losses.giou import GIoULoss, bbox_iou_aligned
 from losses.qfl import QualityFocalLoss
 from losses.token_consistency import TokenConsistencyLoss
-from models.backbone.tinynext import TinyNeXt
+from models.backbone.builder import build_backbone
 from models.head.gfl_head import GFLHead
 from models.neck.pyramid_projection import LocalCNNPath, PyramidProjection
 from models.token.ema_token_router import EMATokenRouter
@@ -46,12 +46,7 @@ class LiteGTR(nn.Module):
         self.levels = LEVELS if self.use_p2 else LEVELS[1:]
         self.strides = tuple(4 * (2 ** i) for i in range(4)) if self.use_p2 else (8, 16, 32)
 
-        bb = mc["backbone"]
-        self.backbone = TinyNeXt(
-            channels=tuple(bb["channels"]), depths=tuple(bb["depths"]),
-            drop_path_rate=bb.get("drop_path_rate", 0.0),
-            out_indices=tuple(range(4)) if self.use_p2 else (1, 2, 3),
-        )
+        self.backbone = build_backbone(mc["backbone"], self.use_p2)
 
         dim = mc["neck"]["channels"]
         self.neck = PyramidProjection(self.backbone.out_channels, dim, use_fpn=mc["neck"].get("use_fpn", True))

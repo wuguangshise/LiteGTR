@@ -30,14 +30,30 @@ class Recorder:
         return lg
 
     def _append(self, path: Path, row: dict) -> None:
-        if path not in self._headers:
-            self._headers[path] = list(row.keys())
-        write_header = not path.exists() or path.stat().st_size == 0
-        with open(path, "a", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=self._headers[path])
-            if write_header:
+        """Append a row, widening the header if this row introduces new columns.
+
+        Validation epochs carry metric columns that training-only epochs do not,
+        so the header genuinely grows mid-run; a fixed header would drop those
+        columns for the rest of the run.
+        """
+        known = self._headers.get(path, [])
+        new_cols = [k for k in row if k not in known]
+        header = known + new_cols
+        rows: list[dict] = []
+        if new_cols and known and path.exists():
+            with open(path, "r", newline="", encoding="utf-8") as f:
+                rows = list(csv.DictReader(f))
+        self._headers[path] = header
+
+        rewrite = bool(new_cols and known and rows)
+        mode = "w" if rewrite or not path.exists() or path.stat().st_size == 0 else "a"
+        with open(path, mode, newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=header)
+            if mode == "w":
                 w.writeheader()
-            w.writerow({k: row.get(k, "") for k in self._headers[path]})
+                for old in rows:
+                    w.writerow({k: old.get(k, "") for k in header})
+            w.writerow({k: row.get(k, "") for k in header})
 
     def log_epoch(self, row: dict) -> None:
         self._append(self.results_csv, row)

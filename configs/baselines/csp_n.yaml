@@ -1,0 +1,11 @@
+# CSP (YOLOv8n-class) baseline under the IDENTICAL protocol: same neck, head,
+# losses, assigner, augmentation and schedule as LiteGTR-Main. Only the feature
+# extractor differs, and the token path is off. (docs/DESIGN.md P1-6)
+_base_: [../models/model_main.yaml]
+model:
+  backbone:
+    type: csp
+    channels: [32, 64, 128, 256]
+    depths: [1, 2, 2, 1]
+  token:
+    enabled: false

@@ -12,6 +12,10 @@ train:
   val_interval: 1
   save_period: 0          # >0 also writes epoch_xx.pt
   monitor: mAP50_95
+  model_ema:              # weight EMA; distinct from the token-routing teacher
+    enabled: true
+    decay: 0.9998
+    tau: 2000
 
 loss:
   qfl_weight: 1.0

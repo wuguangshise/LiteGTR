@@ -9,6 +9,7 @@ import torch
 from tqdm import tqdm
 
 from engine.checkpoint import CheckpointManager
+from engine.ema import ModelEMA
 from engine.evaluator import collect_token_stats, evaluate
 from engine.recorder import Recorder
 
@@ -61,6 +62,11 @@ class Trainer:
         self.optimizer = build_optimizer(self.model, tc)
         self.scheduler = build_scheduler(self.optimizer, tc, max(len(train_loader), 1))
         self.scaler = torch.amp.GradScaler("cuda", enabled=self.amp)
+        # weight EMA (generic training trick) -- distinct from the token-routing
+        # EMA teacher, which is part of the method itself
+        ec = tc.get("model_ema", {})
+        self.model_ema = (ModelEMA(self.model, decay=ec.get("decay", 0.9998),
+                                   tau=ec.get("tau", 2000)) if ec.get("enabled", True) else None)
         self.recorder = Recorder(out_dir)
         self.ckpt = CheckpointManager(out_dir, monitor=tc.get("monitor", "mAP50_95"),
                                       save_period=tc.get("save_period", 0))
@@ -85,7 +91,9 @@ class Trainer:
             self.scaler.step(self.optimizer)
             self.scaler.update()
             self.scheduler.step()
-            self.model.ema_step()          # no-op when EMA routing is disabled
+            self.model.ema_step()          # token-routing teacher; no-op when disabled
+            if self.model_ema is not None:
+                self.model_ema.update(self.model)
 
             for k, v in losses.items():
                 agg[k] = agg.get(k, 0.0) + float(v)
@@ -104,8 +112,13 @@ class Trainer:
                    "lr": self.scheduler.get_last_lr()[0]}
 
             if epoch % self.cfg["train"].get("val_interval", 1) == 0 or epoch == self.epochs:
-                overall, by_cond = evaluate(self.model, self.val_loader, self.device,
-                                            self.classes, amp=self.amp)
+                eval_model = self._eval_model()
+                # run artefacts (confusion matrix, PR curves, val_predictions) are
+                # written on the final epoch only -- they are slow and only the
+                # last state is reported
+                save_dir = self.recorder.dir if epoch == self.epochs else None
+                overall, by_cond = evaluate(eval_model, self.val_loader, self.device,
+                                            self.classes, amp=self.amp, save_dir=save_dir)
                 row.update({f"val/{k}": round(v, 5) for k, v in overall.items()})
                 if by_cond:
                     self.recorder.log_conditions(epoch, by_cond)
@@ -113,16 +126,17 @@ class Trainer:
                         "per-condition mAP50:95 -> " +
                         ", ".join(f"{c}={m['mAP50_95']:.4f}(n={m['num_images']})"
                                   for c, m in by_cond.items()))
-                ts = collect_token_stats(self.model, self.val_loader, self.device)
+                ts = collect_token_stats(eval_model, self.val_loader, self.device)
                 if ts:
                     self.recorder.log_tokens({"epoch": epoch, **ts})
                 improved = self.ckpt.save(self.model, self.optimizer, self.scheduler,
-                                          epoch, overall, self.cfg)
+                                          epoch, overall, self.cfg, model_ema=self.model_ema)
                 if improved:
                     best = dict(overall)
                     best["epoch"] = epoch
             else:
-                self.ckpt.save(self.model, self.optimizer, self.scheduler, epoch, {}, self.cfg)
+                self.ckpt.save(self.model, self.optimizer, self.scheduler, epoch, {}, self.cfg,
+                               model_ema=self.model_ema)
 
             row["time"] = round(time.time() - t0, 1)
             self.recorder.log_epoch(row)
@@ -131,3 +145,7 @@ class Trainer:
 
         self.recorder.save_json("best_metrics.json", best)
         return best
+
+    def _eval_model(self):
+        """Evaluate the EMA weights when weight-EMA is on, else the raw model."""
+        return self.model if self.model_ema is None else self.model_ema.ema

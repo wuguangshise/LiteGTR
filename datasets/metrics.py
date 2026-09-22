@@ -29,6 +29,7 @@ class COCOMeanAP:
         self._dt: list[dict] = []
         self._images: dict[int, dict] = {}
         self._ann_id = 1
+        self._last_eval = None      # COCOeval object from the most recent evaluate()
 
     def add(self, image_id: int, height: int, width: int, condition: str,
             gt_boxes: np.ndarray, gt_labels: np.ndarray,
@@ -75,6 +76,7 @@ class COCOMeanAP:
             e = COCOeval(coco_gt, coco_dt, "bbox")
             e.params.imgIds = img_ids
             e.evaluate(); e.accumulate(); e.summarize()
+        self._last_eval = e
         s = e.stats
         return {"mAP50_95": float(s[0]), "mAP50": float(s[1]), "mAP75": float(s[2]),
                 "AP_small": float(s[3]), "AP_medium": float(s[4]), "AP_large": float(s[5]),
@@ -82,3 +84,25 @@ class COCOMeanAP:
 
     def available_conditions(self) -> list[str]:
         return sorted({m["condition"] for m in self._images.values()})
+
+    def pr_curves(self, iou_index: int = 0, area_index: int = 0) -> dict:
+        """Per-class (recall, precision) arrays from the last ``evaluate()`` call.
+
+        ``COCOeval.eval['precision']`` has shape [T, R, K, A, M]: IoU threshold,
+        recall threshold, category, area range, maxDets. Defaults select
+        IoU=0.50 and area='all' at the largest maxDets setting.
+        """
+        e = self._last_eval
+        if e is None or not getattr(e, "eval", None):
+            return {}
+        prec = e.eval["precision"]
+        rec_thrs = e.params.recThrs
+        out: dict[str, tuple] = {}
+        for k, name in enumerate(self.classes):
+            if k >= prec.shape[2]:
+                break
+            p = prec[iou_index, :, k, area_index, -1]
+            valid = p > -1
+            if valid.any():
+                out[name] = (np.asarray(rec_thrs)[valid], np.asarray(p)[valid])
+        return out

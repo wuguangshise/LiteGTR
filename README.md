@@ -34,7 +34,18 @@ python tools/profile.py --search                              # analytic sweep, 
 python tools/profile.py --config configs/models/model_main.yaml --out runs/profile
 ```
 
-**2. Prepare data.**
+**2. Measure your data before trusting the token budget.**
+
+```bash
+python tools/analyze_dataset.py --config configs/datasets/visdrone_rgb.yaml \
+    configs/models/model_main.yaml --split train
+```
+
+Prints objects-per-image percentiles, COCO size buckets and class balance, then
+compares them against the configured token budget. If it reports fewer tokens
+than objects on a typical image, sweep the budget before anything else.
+
+**3. Prepare data.**
 
 VisDrone needs no preprocessing — point `configs/datasets/visdrone_rgb.yaml` at it.
 
@@ -54,7 +65,7 @@ python tools/visualize_labels.py --config configs/datasets/dronevehicle_rgb.yaml
 Open `runs/label_check/`. Boxes must sit **on** the vehicles. A missing
 coordinate shift does not raise an error — it just trains a wrong model.
 
-**3. Sweep the token budget before the main experiment.**
+**4. Sweep the token budget before the main experiment.**
 
 ```bash
 for b in 56 128 256 512; do
@@ -66,29 +77,38 @@ done
 If accuracy is flat across budgets, the global path is not earning its place —
 fix that before running anything else.
 
-**4. Train / evaluate / export.**
+**5. Train, compare against baselines, evaluate, export.**
 
 ```bash
 python tools/train.py --config configs/datasets/visdrone_rgb.yaml configs/models/model_main.yaml
+
+# baselines run the SAME neck, head, losses, assigner, augmentation and schedule
+python tools/train.py --config configs/datasets/visdrone_rgb.yaml configs/baselines/csp_n.yaml
+python tools/train.py --config configs/datasets/visdrone_rgb.yaml configs/baselines/tinynext_no_token.yaml
+
 python tools/val.py   --config configs/datasets/dronevehicle_rgb.yaml configs/models/model_main.yaml \
                       --weights runs/train/<name>/weights/best.pt
 python tools/run_seeds.py --config configs/datasets/visdrone_rgb.yaml configs/models/model_main.yaml \
                           --seeds 0 1 2
 python tools/export_onnx.py --config configs/models/model_main.yaml --weights ... --simplify
 python tools/benchmark_latency.py --config configs/models/model_main.yaml --imgsz 640
+python tools/submit_visdrone.py --config configs/datasets/visdrone_rgb.yaml \
+    configs/models/model_main.yaml --weights ... --split test --out runs/submit
 ```
 
 ## Layout
 
 ```
-configs/    _base_ / datasets / models / ablation     — every ablation is a YAML key
-datasets/   loaders, transforms, metric definitions, prepare/ scripts
-models/     backbone · neck · token (selector, mixer, writeback, ema) · head · build
+configs/    _base_ / datasets / models / ablation / baselines   — every variant is a YAML key
+datasets/   base · builder · visdrone · dronevehicle · transforms · metrics · prepare/
+models/     backbone (tinynext + builder) · baselines/ · neck · token · head · detector · build
 losses/     qfl · giou · dfl · token_consistency
 assigners/  task_aligned_assigner
-engine/     trainer · evaluator (loop) · checkpoint · recorder
-tools/      profile · visualize_labels · train · val · test · run_seeds · export_onnx · benchmark_latency
-tests/      param-budget guard · static-ONNX guard · shape/backward smoke
+engine/     trainer · evaluator (loop) · ema · checkpoint · recorder
+tools/      profile · analyze_dataset · visualize_labels · train · val · test
+            run_seeds · export_onnx · benchmark_latency · submit_visdrone
+utils/      budget (analytic) · boxes (letterbox inverse, IoU) · plots
+tests/      param-budget guard · static-ONNX guard · shape/backward · baselines · boxes · config
 ```
 
 ## Run output
@@ -99,6 +119,7 @@ runs/train/<name>/
 ├── results.csv / results.png
 ├── results_by_condition.csv      # day / night / dark breakdown
 ├── token_stats.csv               # score entropy, EMA agreement
+├── confusion_matrix.png / pr_curve.png / val_predictions/
 ├── args.yaml / model_summary.txt / flops_params.txt / training.log
 ```
 

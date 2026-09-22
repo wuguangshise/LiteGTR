@@ -93,17 +93,3 @@ class DroneVehicleDataset(DetectionDataset):
                                     "ori_shape": img.shape[:2],
                                     "condition": self._condition(p.stem, img)}
 
-
-def build_dataset(cfg: dict, split: str, train: bool):
-    """Factory used by tools/train.py -- keeps dataset choice in YAML."""
-    d = cfg["data"]
-    name = d["name"].lower()
-    common = dict(root=d["root"], split=d[f"{split}_split"], img_size=d.get("img_size", 640),
-                  train=train, mosaic_prob=d.get("mosaic_prob", 0.5) if train else 0.0)
-    if name == "visdrone":
-        from datasets.visdrone import VisDroneDataset
-        return VisDroneDataset(ignore_mode=d.get("ignore_mode", "mask"), **common)
-    if name == "dronevehicle":
-        return DroneVehicleDataset(modality=d.get("modality", "rgb"),
-                                   label_dirname=d.get("label_dirname", "hbb_labels"), **common)
-    raise ValueError(f"unknown dataset: {d['name']}")

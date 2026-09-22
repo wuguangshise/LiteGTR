@@ -18,7 +18,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from datasets.dronevehicle import build_dataset  # noqa: E402
+from datasets.builder import build_dataset  # noqa: E402
 from models.build import load_config  # noqa: E402
 
 COLORS = [(66, 135, 245), (66, 245, 135), (245, 135, 66), (245, 66, 135),
