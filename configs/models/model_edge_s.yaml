@@ -1,0 +1,16 @@
+_base_: [model_main.yaml]
+
+# Edge-S: the ~1M-backbone variant for the params/latency trade-off curve.
+model:
+  backbone:
+    channels: [24, 48, 96, 160]
+    depths: [2, 3, 6, 2]
+    drop_path_rate: 0.05
+  neck:
+    channels: 48
+  token:
+    budget: {P3: 16, P4: 16, P5: 8}
+    grids:  {P3: 4,  P4: 4,  P5: 2}
+  head:
+    stacked_convs: 1
+    p2_stacked_convs: 1

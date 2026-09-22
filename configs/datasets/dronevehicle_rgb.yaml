@@ -1,0 +1,13 @@
+# Run BOTH prepare scripts before first use, then tools/visualize_labels.py:
+#   python -m datasets.prepare.crop_dronevehicle_border ...   (P0-5 (1))
+#   python -m datasets.prepare.obb_to_hbb ...                 (P0-5 (2))
+data:
+  name: dronevehicle
+  root: D:/data/DroneVehicle_cropped
+  train_split: train
+  val_split: val
+  test_split: test
+  modality: rgb
+  label_dirname: hbb_labels
+  img_size: 640
+  mosaic_prob: 0.5

@@ -1,0 +1,6 @@
+# IR-only control (P1-10). Same model, same protocol, only the input changes.
+# Quantifies how hard night-time RGB actually is, and pre-empts the reviewer
+# question "you had paired IR, why not use it?". NOT part of the main claim.
+_base_: [dronevehicle_rgb.yaml]
+data:
+  modality: ir

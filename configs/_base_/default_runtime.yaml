@@ -1,0 +1,5 @@
+seed: 0
+deterministic: false
+output_root: runs/train
+loader:
+  num_workers: 4          # Windows: workers are safe, entry points are main-guarded

@@ -1,0 +1,9 @@
+data:
+  name: visdrone
+  root: D:/data/VisDrone            # set to your path; never hard-coded in code
+  train_split: VisDrone2019-DET-train
+  val_split: VisDrone2019-DET-val
+  test_split: VisDrone2019-DET-test-dev
+  img_size: 640
+  mosaic_prob: 0.5
+  ignore_mode: mask       # P1-9: class 0 regions are painted out, class 11 dropped

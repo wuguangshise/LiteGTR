@@ -1,0 +1,2 @@
+_base_: [../models/model_main.yaml]
+model: {token: {budget: {P3: 256, P4: 192, P5: 64}, grids: {P3: 4, P4: 4, P5: 2}}}

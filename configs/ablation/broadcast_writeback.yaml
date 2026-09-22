@@ -1,0 +1,3 @@
+# Naive baseline: uniform attention, i.e. broadcast the token set back.
+_base_: [../models/model_main.yaml]
+model: {token: {writeback_mode: broadcast}}

@@ -1,0 +1,39 @@
+_base_: [../_base_/default_runtime.yaml, ../_base_/schedule.yaml]
+
+# LiteGTR-Main. Backbone locked from tools/profile.py --search:
+#   original [32,64,128,256]x[4,4,9,4] = 3.76M / 4.95G MACs -- backbone alone
+#   consumed the entire budget. Stage4 was the offender (2.16M) and contributes
+#   least to small-object AP, so it is the part that got cut. (docs/DESIGN.md P0-1)
+model:
+  num_classes: 10          # overwritten from the dataset at runtime
+  use_p2: true
+  use_local_cnn: true
+
+  backbone:
+    channels: [32, 64, 128, 192]
+    depths: [2, 4, 8, 2]
+    drop_path_rate: 0.1
+
+  neck:
+    channels: 64
+    use_fpn: true          # P2-12: pure projection loses small objects
+
+  token:
+    enabled: true
+    levels: [P3, P4, P5]           # P2 stays local-only -- too expensive (P0-2)
+    writeback_levels: [P3, P4, P5]
+    budget: {P3: 32, P4: 16, P5: 8}   # NOT a final value -- sweep first (P0-3)
+    grids:  {P3: 4,  P4: 4,  P5: 2}   # local candidate routing, k = budget/grid^2
+    num_heads: 1
+    mlp_ratio: 2.0
+    mixer_layers: 1
+    writeback_mode: geometric      # geometric | content | broadcast
+    ema:
+      enabled: true
+      momentum: 0.999
+      warmup_iters: 1000
+
+  head:
+    stacked_convs: 2
+    p2_stacked_convs: 1     # P0-2: P2 is 160x160 at 640 input
+    reg_max: 16

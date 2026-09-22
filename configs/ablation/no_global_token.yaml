@@ -1,0 +1,3 @@
+# Does global modelling matter at all? If this barely moves, the paper has no core claim.
+_base_: [../models/model_main.yaml]
+model: {token: {enabled: false}}

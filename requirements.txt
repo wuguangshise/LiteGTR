@@ -1,0 +1,19 @@
+# Core (install torch matching your CUDA from https://pytorch.org)
+torch>=2.0.0
+torchvision>=0.15.0
+
+numpy>=1.23
+opencv-python>=4.7
+pyyaml>=6.0
+tqdm>=4.65
+pandas>=1.5
+matplotlib>=3.6
+pycocotools>=2.0.6
+
+# Profiling / export (tools/profile.py, tools/export_onnx.py, tools/benchmark_latency.py)
+thop>=0.1.1
+onnx>=1.14
+onnxruntime>=1.15
+
+# Tests
+pytest>=7.0

@@ -1,0 +1,4 @@
+# Isolates the geometric prior: keeps cross-attention writeback, drops the
+# Gaussian position/scale term. This is the ablation for the primary claim.
+_base_: [../models/model_main.yaml]
+model: {token: {writeback_mode: content}}

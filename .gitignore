@@ -1,0 +1,9 @@
+runs/
+__pycache__/
+*.pyc
+*.pt
+*.onnx
+.vscode/
+.idea/
+data/
+*.egg-info/
