@@ -1,6 +1,6 @@
 data:
   name: visdrone
-  root: D:/data/VisDrone            # set to your path; never hard-coded in code
+  root: D:/dataset/VisDrone/LiteGTR   # your path; tools also accept --data-root to override
   train_split: VisDrone2019-DET-train
   val_split: VisDrone2019-DET-val
   test_split: VisDrone2019-DET-test-dev

@@ -8,6 +8,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from models.build import build_model, load_config  # noqa: E402
+from utils.export import onnx_export  # noqa: E402
 
 
 class _Wrapper(torch.nn.Module):
@@ -28,9 +29,9 @@ def test_export_is_static(tmp_path):
     model = build_model(cfg).eval()
     model.ema_router = None
     path = tmp_path / "m.onnx"
-    torch.onnx.export(_Wrapper(model), torch.randn(1, 3, 256, 256), str(path),
-                      input_names=["images"], output_names=["scores", "boxes"],
-                      opset_version=13, do_constant_folding=True, dynamic_axes=None)
+    onnx_export(_Wrapper(model), torch.randn(1, 3, 256, 256), str(path),
+                input_names=["images"], output_names=["scores", "boxes"],
+                opset_version=13, do_constant_folding=True, dynamic_axes=None)
     m = onnx.load(str(path))
     onnx.checker.check_model(m)
     dyn = [d.dim_param for vi in list(m.graph.input) + list(m.graph.output)

@@ -166,7 +166,6 @@ class Trainer:
 
     def fit(self) -> dict:
         self.recorder.logger.info(f"training for {self.epochs} epochs on {self.device}")
-        best: dict = {}
         for epoch in range(self.start_epoch, self.epochs + 1):
             t0 = time.time()
             if (self.no_aug_epochs and not self._mosaic_closed
@@ -194,12 +193,9 @@ class Trainer:
                 ts = collect_token_stats(eval_model, self.val_loader, self.device)
                 if ts:
                     self.recorder.log_tokens({"epoch": epoch, **ts})
-                improved = self.ckpt.save(self.model, self.optimizer, self.scheduler,
-                                          epoch, overall, self.cfg, model_ema=self.model_ema,
-                                          scaler=self.scaler)
-                if improved:
-                    best = dict(overall)
-                    best["epoch"] = epoch
+                self.ckpt.save(self.model, self.optimizer, self.scheduler,
+                               epoch, overall, self.cfg, model_ema=self.model_ema,
+                               scaler=self.scaler)
             else:
                 self.ckpt.save(self.model, self.optimizer, self.scheduler, epoch, {}, self.cfg,
                                model_ema=self.model_ema, scaler=self.scaler)
@@ -209,6 +205,9 @@ class Trainer:
             self.recorder.logger.info(" | ".join(f"{k}={v}" for k, v in row.items()))
             self.recorder.plot_curves()
 
+        # Held by the checkpoint manager, not a local, so a resumed run that never
+        # improves still reports the best from before the interruption.
+        best = self.ckpt.best_metrics
         self.recorder.save_json("best_metrics.json", best)
         return best
 
@@ -231,10 +230,15 @@ class Trainer:
         """
         ck = torch.load(path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(ck["model"], strict=True)
+        epoch = int(ck.get("epoch", 0))
         if self.model_ema is not None:
             if ck.get("model_ema"):
                 self.model_ema.load_state_dict(ck["model_ema"])
-                self.model_ema.updates = int(ck.get("ema_updates", 0))
+                # Older checkpoints did not record the update count. Resetting it to 0
+                # would restart the decay ramp and let raw weights overwrite the EMA;
+                # optimiser steps so far is exact, since the loader drops the last batch.
+                self.model_ema.updates = int(ck.get("ema_updates",
+                                                    epoch * len(self.train_loader)))
             else:   # checkpoint predates EMA state: start the EMA from the raw weights
                 self.model_ema.load_state_dict(self.model.state_dict())
         if ck.get("optimizer"):
@@ -245,12 +249,33 @@ class Trainer:
             self.scaler.load_state_dict(ck["scaler"])
         if "best" in ck:
             self.ckpt.best = ck["best"]
-        self.start_epoch = int(ck.get("epoch", 0)) + 1
+            self.ckpt.best_metrics = ck.get("best_metrics") or {}
+        else:
+            self._best_from_log()            # older checkpoint: recover best from results.csv
+        self.start_epoch = epoch + 1
         self.recorder.logger.info(
             f"resumed from {path}: continuing at epoch {self.start_epoch}, "
             f"best {self.ckpt.monitor}={self.ckpt.best}, ema_updates="
             f"{self.model_ema.updates if self.model_ema is not None else '-'}")
         return self.start_epoch
+
+    def _best_from_log(self) -> None:
+        """Recover best-so-far from results.csv for checkpoints that predate the
+        ``best`` field, so the first resumed epoch cannot overwrite best.pt."""
+        path = self.recorder.results_csv
+        col = f"val/{self.ckpt.monitor}"
+        if not path.exists():
+            return
+        import csv
+        with open(path, "r", newline="", encoding="utf-8") as f:
+            rows = [r for r in csv.DictReader(f) if r.get(col) not in (None, "")]
+        if not rows:
+            return
+        top = max(rows, key=lambda r: float(r[col]))
+        self.ckpt.best = float(top[col])
+        self.ckpt.best_metrics = {k.split("/", 1)[1]: float(v) for k, v in top.items()
+                                  if k.startswith("val/") and v not in (None, "")}
+        self.ckpt.best_metrics["epoch"] = int(float(top["epoch"]))
 
     def _eval_model(self):
         """Evaluate the EMA weights when weight-EMA is on, else the raw model."""

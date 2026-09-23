@@ -24,7 +24,9 @@ class TokenMixer(nn.Module):
 
     def forward(self, tokens: torch.Tensor, coords: torch.Tensor,
                 level_ids: torch.Tensor | None = None) -> torch.Tensor:
-        x = tokens + self.coord_proj(coords)
+        # coords stay fp32 for precision; cast to the layer's dtype so a pure-fp16
+        # model does not hit a Float/Half mismatch (autocast handles AMP already)
+        x = tokens + self.coord_proj(coords.to(self.coord_proj.weight.dtype))
         if self.level_embed is not None and level_ids is not None:
             x = x + self.level_embed[level_ids.long()].unsqueeze(0)
         for layer in self.layers:

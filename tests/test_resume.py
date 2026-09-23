@@ -87,3 +87,30 @@ def test_resume_refuses_a_checkpoint_from_a_different_model(saved, tmp_path):
     other = _trainer(tmp_path / "c", width=8)
     with pytest.raises(RuntimeError):
         other.resume(ck)
+
+
+def test_resume_carries_best_metrics(saved, tmp_path):
+    _, ck = saved
+    b = _trainer(tmp_path / "b")
+    b.resume(ck)
+    assert b.ckpt.best_metrics.get("mAP50_95") == 0.2 and b.ckpt.best_metrics.get("epoch") == 3
+
+
+def test_resume_from_a_checkpoint_that_predates_the_resume_fields(tmp_path):
+    """Checkpoints written before the resume fix have no ema_updates / best /
+    best_metrics. The EMA update count is reconstructed from epochs x steps (0 would
+    restart the decay ramp), and best is recovered from results.csv."""
+    a = _trainer(tmp_path / "run")
+    for e, m in ((1, 0.10), (2, 0.25), (3, 0.18)):
+        a.recorder.log_epoch({"epoch": e, "train/loss": 1.0, "val/mAP50_95": m})
+    payload = {"model": a.model.state_dict(), "model_ema": a.model_ema.state_dict(),
+               "optimizer": a.optimizer.state_dict(), "scheduler": a.scheduler.state_dict(),
+               "epoch": 3, "metrics": {"mAP50_95": 0.18}, "config": _cfg()}
+    old = tmp_path / "old_last.pt"
+    torch.save(payload, old)
+
+    b = _trainer(tmp_path / "run")          # same run dir, so results.csv is visible
+    assert b.resume(old) == 4
+    assert b.model_ema.updates == 3 * len(b.train_loader)
+    assert b.ckpt.best == 0.25, "best must come from the log, not the last epoch"
+    assert b.ckpt.best_metrics["epoch"] == 2

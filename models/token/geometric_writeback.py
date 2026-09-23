@@ -84,14 +84,19 @@ class GeometricWriteback(nn.Module):
         else:
             logits = (q @ k.transpose(-2, -1)) * self.scale                    # (B,h,HW,N)
             if self.mode == "geometric":
-                grid = self._grid(h, w, feat.device, feat.dtype)               # (HW,2)
-                sigma = nn.functional.softplus(self.sigma(tokens)) + self.sigma_min  # (B,N,2)
-                d = grid.view(1, hw, 1, 2) - coords.view(b, 1, n, 2)           # (B,HW,N,2)
+                # The Gaussian prior is always evaluated in fp32, whatever precision
+                # the rest of the model runs in. (d/sigma)^2 reaches ~2500 at
+                # sigma_min, positions need sub-cell precision, and in a pure-fp16
+                # model (benchmark_latency --half) mixing fp32 coords with half
+                # tensors used to raise a dtype mismatch.
+                grid = self._grid(h, w, feat.device, torch.float32)            # (HW,2)
+                sigma = nn.functional.softplus(self.sigma(tokens)).float() + self.sigma_min
+                d = grid.view(1, hw, 1, 2) - coords.float().view(b, 1, n, 2)   # (B,HW,N,2)
                 g = -0.5 * ((d / sigma.view(b, 1, n, 2)) ** 2).sum(-1)         # (B,HW,N)
-                logits = logits + g.unsqueeze(1)
+                logits = logits.float() + g.unsqueeze(1)
             attn = logits.softmax(dim=-1)
 
-        out = (attn @ v)                                                       # (B,h,HW,dh)
+        out = attn.to(v.dtype) @ v                                             # (B,h,HW,dh)
         out = out.permute(0, 1, 3, 2).reshape(b, c, h, w)
         return feat + self.gamma * self.proj(out)
 

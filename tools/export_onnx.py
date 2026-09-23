@@ -20,6 +20,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from models.build import build_model, load_config  # noqa: E402
+from utils.export import onnx_export  # noqa: E402
 
 
 def main() -> None:
@@ -54,7 +55,7 @@ def main() -> None:
             c, r, boxes, _, _ = self.m.head.decode(cls, reg, feats)
             return c.sigmoid(), boxes
 
-    torch.onnx.export(
+    onnx_export(
         Wrapper(model), x, str(out),
         input_names=["images"], output_names=["scores", "boxes"],
         opset_version=a.opset, do_constant_folding=True,

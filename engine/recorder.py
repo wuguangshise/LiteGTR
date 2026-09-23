@@ -36,6 +36,12 @@ class Recorder:
         so the header genuinely grows mid-run; a fixed header would drop those
         columns for the rest of the run.
         """
+        if path not in self._headers and path.exists() and path.stat().st_size > 0:
+            # A resumed run starts with an empty in-memory header. Adopt the one on
+            # disk, otherwise rows are appended in this row's key order under the
+            # file's existing header and the columns silently misalign.
+            with open(path, "r", newline="", encoding="utf-8") as f:
+                self._headers[path] = next(csv.reader(f), [])
         known = self._headers.get(path, [])
         new_cols = [k for k in row if k not in known]
         header = known + new_cols

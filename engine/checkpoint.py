@@ -15,6 +15,7 @@ class CheckpointManager:
         self.mode = mode
         self.save_period = save_period
         self.best = -float("inf") if mode == "max" else float("inf")
+        self.best_metrics: dict = {}
 
     def _better(self, value: float) -> bool:
         return value > self.best if self.mode == "max" else value < self.best
@@ -28,6 +29,7 @@ class CheckpointManager:
         improved = value == value and self._better(value)   # NaN-safe
         if improved:
             self.best = value
+            self.best_metrics = {**metrics, "epoch": epoch}
         payload = {
             "model": model.state_dict(),
             "model_ema": model_ema.state_dict() if model_ema is not None else None,
@@ -37,6 +39,7 @@ class CheckpointManager:
             "scaler": scaler.state_dict() if scaler is not None and scaler.is_enabled() else None,
             "epoch": epoch,
             "best": self.best,
+            "best_metrics": self.best_metrics,
             "metrics": metrics,
             "config": cfg,
         }

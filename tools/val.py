@@ -29,6 +29,7 @@ def main() -> None:
     ap.add_argument("--config", nargs="+", required=True)
     ap.add_argument("--weights", required=True)
     ap.add_argument("--split", default="val")
+    ap.add_argument("--data-root", default=None, help="override data.root from the YAML")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--save-dir", default=None,
@@ -37,6 +38,8 @@ def main() -> None:
     a = ap.parse_args()
 
     cfg = load_config(*a.config)
+    if a.data_root:
+        cfg["data"]["root"] = a.data_root
     ds = build_dataset(cfg, a.split, train=False)
     cfg["model"]["num_classes"] = len(ds.classes)
     loader = DataLoader(ds, batch_size=a.batch, shuffle=False, num_workers=cfg.get("loader", {}).get("num_workers", 4),

@@ -23,6 +23,18 @@ def _model(variant: str):
     return build_model(variant_cfg(variant)).train()
 
 
+def _open_writeback_gates(model, value: float = 0.1) -> None:
+    """The write-back residual gate gamma is initialised to 0 by design, so on the
+    very first step every gradient upstream of it -- tokens, mixer, scorer -- is
+    multiplied by zero, gate or no gate. Real training moves gamma off zero after
+    one step. Tests that ask "does a gradient PATH exist" must open the gate
+    first; otherwise both "has a path" and "has no path" read as zero gradient,
+    and a test asserting the latter passes without testing anything."""
+    with torch.no_grad():
+        for blk in model.writeback.blocks.values():
+            blk.gamma.fill_(value)
+
+
 def _targets():
     return [{"boxes": torch.tensor([[20.0, 20.0, 60.0, 60.0], [90.0, 80.0, 140.0, 150.0]]),
              "labels": torch.tensor([0, 3])},
@@ -41,6 +53,7 @@ def test_scorer_learns_from_the_detection_loss_alone():
     """The regression test for defect 1. EMA is OFF, so the ONLY route into the
     scorer is the detection loss through the score gate."""
     model = _model("no_ema")
+    _open_writeback_gates(model)
     losses = model.loss(torch.randn(2, 3, 256, 256), _targets())
     assert "loss_token" not in losses
     sum(losses.values()).backward()
@@ -51,8 +64,19 @@ def test_random_routing_leaves_the_scorer_untrained():
     """Without the gate and without EMA nothing reaches the scorer, so selection
     is effectively random -- the baseline a reviewer asks for."""
     model = _model("random_routing")
+    _open_writeback_gates(model)     # with the gate closed this would pass vacuously
     sum(model.loss(torch.randn(2, 3, 256, 256), _targets()).values()).backward()
     assert _scorer_grad(model) == 0.0
+
+
+def test_zero_init_gate_blocks_token_path_gradient_on_the_first_step():
+    """Documents the behaviour above: at initialisation the token path receives no
+    gradient except gamma's own -- training starts from the pure local-CNN
+    solution and phases the global path in."""
+    model = _model("no_ema")
+    sum(model.loss(torch.randn(2, 3, 256, 256), _targets()).values()).backward()
+    assert _scorer_grad(model) == 0.0
+    assert any(float(blk.gamma.grad.abs()) > 0 for blk in model.writeback.blocks.values())
 
 
 def test_photometric_view_changes_appearance_not_geometry():
