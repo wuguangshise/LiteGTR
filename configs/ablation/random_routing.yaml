@@ -1,0 +1,14 @@
+# Random-routing baseline: the scorer receives no gradient at all.
+# With score_gate off, top-k contributes only indices -- the selected tokens are
+# plain gathers -- so the detection loss never reaches the scorer; with EMA off
+# nothing else does either. The scorer stays at its initialisation and the
+# selection is effectively random within each grid region.
+#
+# This answers the question every reviewer asks of a token-selection method:
+# "is your selection any better than random?"
+_base_: [../models/model_main.yaml]
+model:
+  token:
+    score_gate: false
+    ema:
+      enabled: false

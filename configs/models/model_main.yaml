@@ -28,10 +28,17 @@ model:
     mlp_ratio: 2.0
     mixer_layers: 1
     writeback_mode: geometric      # geometric | content | broadcast
+    score_gate: true               # gradient path into the scorer; false = random routing
     ema:
       enabled: true
       momentum: 0.999
       warmup_iters: 1000
+      view: photometric            # photometric | same ("same" is inert, ablation only)
+      photometric:                 # illumination + sensor perturbation for the teacher view
+        brightness: 0.4
+        contrast: 0.4
+        gamma: [0.7, 1.5]
+        noise: 0.03
 
   head:
     stacked_convs: 2

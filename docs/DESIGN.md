@@ -72,17 +72,54 @@ Selection uses **local candidate routing**: the map is split into a `G×G` grid
 and the top-`k` of each region is kept (`k = budget / G²`), so tokens stay
 spatially distributed instead of collapsing onto a few salient blobs.
 
-### P0-4 EMA routing — the gradient path, stated explicitly
-`models/token/ema_token_router.py`, `losses/token_consistency.py`.
+### P0-4 Token routing must learn, and the EMA teacher must see a different view
 
-`top-k` is discrete and non-differentiable. We do **not** backpropagate through
-selection. The EMA teacher emits a *continuous* importance map; the student's
-map is aligned to it by spatial-softmax KL. `top-k` is a pure forward op.
+`models/token/token_selector.py`, `models/token/ema_token_router.py`,
+`losses/token_consistency.py`. Two defects in the first implementation, both
+found from a real training log (`loss_token` flickering between `1e-05` and `0.0`
+from epoch ~50):
 
-No Gumbel-Softmax, no straight-through estimator — so train and inference run
-the identical discrete selection and the exported graph is unchanged. The
-teacher is an EMA of the **scorers only** and is stripped from
-`deploy_state_dict()`, so deployment cost is unaffected.
+**1. The scorer was never trained on the task.** `top-k` supplies only indices,
+and indices are discrete. The selected tokens were plain `gather`s of the feature
+map and the score values were never used downstream, so the detection loss sent
+gradient into the features and **none into the scorer**. Routing was effectively
+random within each grid region.
+
+*Fix — score gating.* Each selected token is scaled by `sigmoid(score)`, which
+gives the detection loss a path into the scorer. `top-k` itself stays a pure
+forward op with a static `k`; the exported graph gains one sigmoid and one
+multiply. `score_gate: false` is retained as the random-routing baseline.
+
+**2. The EMA consistency loss constrained nothing.** The teacher (an EMA of the
+student's scorers) received the student's *exact input*. The loss therefore
+measured only the drift between the network and a ~1000-step-old copy of itself
+on identical data, which decays to zero on its own as training converges and the
+learning rate falls. Mean Teacher, BYOL and DINO work because of **asymmetry** —
+different views, and a loss that says the output must not depend on the
+difference. Without it there is nothing to be consistent about.
+
+*Fix — asymmetric photometric view.* The student keeps its normal input, so the
+detection loss is untouched and the consistency term is the only new ingredient.
+The teacher sees a photometric perturbation of the same batch (brightness,
+contrast, gamma, sensor noise). Geometry is unchanged, so the two score maps
+align pixel-for-pixel. The perturbations model illumination change and low-light
+noise, so the constraint reads *token selection should not depend on lighting* —
+the property the DroneVehicle day/night evaluation measures (P1-10).
+
+The teacher branch costs one extra backbone/neck forward (no backward). BatchNorm
+running statistics are preserved across it, so the perturbed batch never leaks
+into the statistics used at validation.
+
+*The gradient question is unchanged:* only the continuous score maps are aligned
+(spatial-softmax KL); `top-k` never enters the graph, train and inference run the
+identical selection, and the teacher is stripped from `deploy_state_dict()`.
+
+| config | score_gate | EMA view | what it isolates |
+|---|---|---|---|
+| `ablation/random_routing` | off | off | is learned selection better than random? |
+| `ablation/no_ema_routing` | on | off | learned routing, no consistency |
+| `models/model_main` | on | photometric | + illumination-invariant routing |
+| `ablation/ema_same_view` | on | same | shows why the asymmetric view is needed |
 
 ### P0-5 DroneVehicle: read the XML, rewrite nothing
 
@@ -246,7 +283,9 @@ DataLoader workers.
 | No P2 | `ablation/no_p2` | is the high-res branch worth its MACs |
 | Writeback mode | `no_geometric_writeback`, `broadcast_writeback` | **isolates the primary claim** |
 | No FPN | `ablation/no_fpn` | cross-scale fusion value |
-| No EMA routing | `ablation/no_ema_routing` | convergence speed, variance, routing stability |
+| Random routing | `ablation/random_routing` | **is learned selection better than random?** |
+| No EMA routing | `ablation/no_ema_routing` | value of the photometric consistency term |
+| Same-view EMA | `ablation/ema_same_view` | why the asymmetric view is necessary |
 | Cross-illumination | `datasets/dronevehicle_rgb` | day / night / dark breakdown |
 | Token × condition | `no_global_token` on DroneVehicle | **does global context matter more at night?** |
 | Seeds | `tools/run_seeds.py` | mean ± std over 3 seeds |

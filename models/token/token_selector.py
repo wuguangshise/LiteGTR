@@ -47,9 +47,25 @@ class TokenScorer(nn.Module):
 
 
 class LocalTopKSelector(nn.Module):
-    """Select ``grid**2 * k_per_region`` tokens from one feature level."""
+    """Select ``grid**2 * k_per_region`` tokens from one feature level.
 
-    def __init__(self, channels: int, num_tokens: int, grid: int, level_id: int):
+    Score gating -- why the scorer needs it
+    ---------------------------------------
+    ``top-k`` contributes only *indices*, and indices are discrete. Without a
+    gate the selected tokens are plain ``gather``s of the feature map, so the
+    detection loss sends gradient into the features and **none into the scorer**.
+    The routing would then never learn what is worth selecting; its only training
+    signal would be whatever auxiliary loss happens to touch the score map.
+
+    With ``score_gate`` each selected token is scaled by ``sigmoid(score)``. The
+    detection loss can now raise the score of tokens that help and lower the
+    score of those that do not. ``top-k`` itself stays a pure forward op with a
+    static ``k``, so the exported graph is unchanged apart from one sigmoid and a
+    multiply. ``score_gate=False`` is kept as the random-routing ablation.
+    """
+
+    def __init__(self, channels: int, num_tokens: int, grid: int, level_id: int,
+                 score_gate: bool = True):
         super().__init__()
         assert num_tokens % (grid * grid) == 0, (
             f"num_tokens={num_tokens} must be divisible by grid^2={grid * grid}"
@@ -58,6 +74,7 @@ class LocalTopKSelector(nn.Module):
         self.grid = grid
         self.k = num_tokens // (grid * grid)
         self.level_id = level_id
+        self.score_gate = score_gate
         self.scorer = TokenScorer(channels)
 
     def forward(self, x: torch.Tensor) -> dict:
@@ -88,6 +105,9 @@ class LocalTopKSelector(nn.Module):
         idx = topi.unsqueeze(-1).expand(-1, -1, -1, c)
         tokens = feat_r.gather(2, idx).reshape(b, self.num_tokens, c)
         scores = topv.reshape(b, self.num_tokens)
+        if self.score_gate:
+            # the gradient path into the scorer -- see the class docstring
+            tokens = tokens * torch.sigmoid(scores).unsqueeze(-1)
 
         # --- geometry: normalised centre of each selected position, in [0,1] ---
         flat = topi                                                # index inside region
@@ -112,11 +132,13 @@ class LocalTopKSelector(nn.Module):
 class MultiLevelTokenSelector(nn.Module):
     """Runs one :class:`LocalTopKSelector` per participating level and concatenates."""
 
-    def __init__(self, channels: int, token_budget: dict[str, int], grids: dict[str, int], levels: list[str]):
+    def __init__(self, channels: int, token_budget: dict[str, int], grids: dict[str, int],
+                 levels: list[str], score_gate: bool = True):
         super().__init__()
         self.levels = levels
         self.selectors = nn.ModuleDict(
-            {lv: LocalTopKSelector(channels, token_budget[lv], grids[lv], i) for i, lv in enumerate(levels)}
+            {lv: LocalTopKSelector(channels, token_budget[lv], grids[lv], i, score_gate=score_gate)
+             for i, lv in enumerate(levels)}
         )
         self.num_tokens = sum(token_budget[lv] for lv in levels)
 

@@ -1,0 +1,8 @@
+# EMA teacher fed the student's own input -- the original, inert design.
+# Kept to show WHY the asymmetric view is needed: with identical inputs the
+# consistency loss measures only weight drift and decays to ~0 on its own.
+_base_: [../models/model_main.yaml]
+model:
+  token:
+    ema:
+      view: same

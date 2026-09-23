@@ -1,2 +1,4 @@
+# Learned routing (score_gate on) without the photometric consistency term.
+# Main vs this isolates the contribution of the asymmetric EMA constraint.
 _base_: [../models/model_main.yaml]
 model: {token: {ema: {enabled: false}}}

@@ -28,7 +28,7 @@ from losses.token_consistency import TokenConsistencyLoss
 from models.backbone.builder import build_backbone
 from models.head.gfl_head import GFLHead
 from models.neck.pyramid_projection import LocalCNNPath, PyramidProjection
-from models.token.ema_token_router import EMATokenRouter
+from models.token.ema_token_router import EMATokenRouter, photometric_view, preserved_bn_stats
 from models.token.geometric_writeback import MultiLevelWriteback
 from models.token.token_mixer import TokenMixer
 from models.token.token_selector import MultiLevelTokenSelector
@@ -57,7 +57,8 @@ class LiteGTR(nn.Module):
         self.use_token = tk.get("enabled", True)
         self.token_levels = [lv for lv in tk["levels"] if lv in self.levels]
         if self.use_token:
-            self.selector = MultiLevelTokenSelector(dim, tk["budget"], tk["grids"], self.token_levels)
+            self.selector = MultiLevelTokenSelector(dim, tk["budget"], tk["grids"], self.token_levels,
+                                                    score_gate=tk.get("score_gate", True))
             self.mixer = TokenMixer(dim, num_heads=tk.get("num_heads", 1),
                                     mlp_ratio=tk.get("mlp_ratio", 2.0),
                                     num_layers=tk.get("mixer_layers", 1),
@@ -66,8 +67,18 @@ class LiteGTR(nn.Module):
             self.writeback = MultiLevelWriteback(dim, [lv for lv in wb_levels if lv in self.levels],
                                                  num_heads=tk.get("num_heads", 1),
                                                  mode=tk.get("writeback_mode", "geometric"))
-            self.ema_router = (EMATokenRouter(self.selector, tk["ema"]["momentum"], tk["ema"].get("warmup_iters", 1000))
-                               if tk.get("ema", {}).get("enabled", False) else None)
+            ema = tk.get("ema", {})
+            self.ema_router = (EMATokenRouter(self.selector, ema["momentum"], ema.get("warmup_iters", 1000))
+                               if ema.get("enabled", False) else None)
+            # "photometric": teacher sees an illumination-perturbed view (the working design)
+            # "same":        teacher sees the student's input -- inert, kept only as an ablation
+            self.ema_view = ema.get("view", "photometric")
+            assert self.ema_view in ("photometric", "same"), self.ema_view
+            pv = ema.get("photometric", {})
+            self.ema_view_cfg = dict(brightness=pv.get("brightness", 0.4),
+                                     contrast=pv.get("contrast", 0.4),
+                                     gamma=tuple(pv.get("gamma", (0.7, 1.5))),
+                                     noise=pv.get("noise", 0.03))
         else:
             self.selector = self.mixer = self.writeback = self.ema_router = None
 
@@ -103,10 +114,31 @@ class LiteGTR(nn.Module):
             sel = self.selector(tok_in)
             self._last_student_maps = sel["score_maps"]
             if self.ema_router is not None and self.training:
-                self._last_teacher_maps = self.ema_router.teacher_score_maps(tok_in)
+                self._last_teacher_maps = self.ema_router.teacher_score_maps(
+                    self._teacher_inputs(images, tok_in))
             mixed = self.mixer(sel["tokens"], sel["coords"], sel["level_ids"])
             fmap = self.writeback(fmap, mixed, sel["coords"])
         return [fmap[lv] for lv in self.levels]
+
+    @torch.no_grad()
+    def _teacher_inputs(self, images: torch.Tensor,
+                        tok_in: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        """Token-level features for the EMA teacher.
+
+        For the photometric view this re-runs backbone, neck and local path on a
+        perturbed copy of the batch -- one extra forward, no backward. BatchNorm
+        running stats are preserved so the perturbed batch never leaks into the
+        statistics used at validation.
+        """
+        if self.ema_view == "same":
+            return tok_in
+        xp = photometric_view(images, **self.ema_view_cfg)
+        with preserved_bn_stats(self.backbone, self.neck, self.local_path):
+            feats = self.neck(self.backbone(xp))
+            if self.local_path is not None:
+                feats = self.local_path(feats)
+        fmap = dict(zip(self.levels, feats))
+        return {lv: fmap[lv] for lv in self.token_levels}
 
     def forward(self, images: torch.Tensor):
         feats = self.extract_feats(images)
