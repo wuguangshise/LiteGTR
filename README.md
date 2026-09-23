@@ -25,6 +25,24 @@ Design rationale, locked decisions and measured budgets: **[docs/DESIGN.md](docs
 pip install -r requirements.txt   # install torch separately to match your CUDA
 ```
 
+## Training entry points
+
+Two entry points, identical training logic (both drive `engine/trainer.py`):
+
+| | how it is configured | use it for |
+|---|---|---|
+| **`train_litegtr.py`** | constants at the top of the file; edit and run | day-to-day experiments |
+| `tools/train.py` | everything from YAML, passed on the command line | batch runs, scheduling scripts |
+
+```bash
+python train_litegtr.py        # set DATA_ROOT and MODEL_CONFIG at the top first
+```
+
+To run an ablation, change `MODEL_CONFIG` and `NAME` together; keep every training
+constant identical across runs so differences are attributable to the model.
+To resume, set `RESUME` to `runs/train/<NAME>/weights/last.pt` with all other
+constants unchanged -- the model config must match, or resuming fails loudly.
+
 ## Quick start
 
 **1. Check the budget before anything else.**
@@ -110,7 +128,8 @@ losses/     qfl · giou · dfl · token_consistency
 assigners/  task_aligned_assigner
 engine/     trainer · evaluator (loop) · ema · checkpoint · recorder
 tools/      profile · analyze_dataset · visualize_labels · train · val · test
-            run_seeds · export_onnx · benchmark_latency · submit_visdrone
+            run_seeds · export_onnx · benchmark_latency · submit_visdrone · inspect_tokens
+train_litegtr.py   edit-and-run training entry (constants at the top)
 utils/      budget (analytic) · boxes (letterbox inverse, IoU) · plots
 tests/      param-budget guard · static-ONNX guard · shape/backward · baselines · boxes · config
 ```

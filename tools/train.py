@@ -67,11 +67,7 @@ def main() -> None:
     trainer.recorder.save_json("args.yaml", {"config_files": a.config, "seed": seed,
                                              "device": str(device), "resolved_config": cfg})
     if a.resume:
-        from engine.checkpoint import CheckpointManager
-        ck = CheckpointManager.load(a.resume, model, trainer.optimizer, trainer.scheduler,
-                                    map_location=device)
-        trainer.start_epoch = int(ck.get("epoch", 0)) + 1
-        trainer.recorder.logger.info(f"resumed from {a.resume} at epoch {trainer.start_epoch}")
+        trainer.resume(a.resume)
 
     n_train = sum(p.numel() for p in model.parameters())
     n_deploy = sum(v.numel() for k, v in model.state_dict().items() if not k.startswith("ema_router."))

@@ -195,13 +195,14 @@ class Trainer:
                 if ts:
                     self.recorder.log_tokens({"epoch": epoch, **ts})
                 improved = self.ckpt.save(self.model, self.optimizer, self.scheduler,
-                                          epoch, overall, self.cfg, model_ema=self.model_ema)
+                                          epoch, overall, self.cfg, model_ema=self.model_ema,
+                                          scaler=self.scaler)
                 if improved:
                     best = dict(overall)
                     best["epoch"] = epoch
             else:
                 self.ckpt.save(self.model, self.optimizer, self.scheduler, epoch, {}, self.cfg,
-                               model_ema=self.model_ema)
+                               model_ema=self.model_ema, scaler=self.scaler)
 
             row["time"] = round(time.time() - t0, 1)
             self.recorder.log_epoch(row)
@@ -210,6 +211,46 @@ class Trainer:
 
         self.recorder.save_json("best_metrics.json", best)
         return best
+
+    def resume(self, path: str | Path) -> int:
+        """Restore a run from ``last.pt`` and return the epoch to continue from.
+
+        Deliberately NOT ``CheckpointManager.load()``, which is for evaluation and
+        prefers the EMA weights. Resuming that way had three consequences:
+
+        * the EMA-smoothed weights were loaded into the model being optimised, so
+          training continued from a different point than where it stopped;
+        * the ModelEMA -- built in ``__init__`` as a copy of the *randomly
+          initialised* model -- was never restored, and since validation uses it,
+          mAP collapsed after a resume until ~10k steps of decay 0.9999 washed the
+          random weights out;
+        * ``best`` restarted at -inf, so the first epoch overwrote best.pt.
+
+        Loading is strict: resuming with a different model config than the one
+        that wrote the checkpoint must fail loudly rather than load partially.
+        """
+        ck = torch.load(path, map_location=self.device, weights_only=False)
+        self.model.load_state_dict(ck["model"], strict=True)
+        if self.model_ema is not None:
+            if ck.get("model_ema"):
+                self.model_ema.load_state_dict(ck["model_ema"])
+                self.model_ema.updates = int(ck.get("ema_updates", 0))
+            else:   # checkpoint predates EMA state: start the EMA from the raw weights
+                self.model_ema.load_state_dict(self.model.state_dict())
+        if ck.get("optimizer"):
+            self.optimizer.load_state_dict(ck["optimizer"])
+        if ck.get("scheduler"):
+            self.scheduler.load_state_dict(ck["scheduler"])
+        if ck.get("scaler") and self.scaler.is_enabled():
+            self.scaler.load_state_dict(ck["scaler"])
+        if "best" in ck:
+            self.ckpt.best = ck["best"]
+        self.start_epoch = int(ck.get("epoch", 0)) + 1
+        self.recorder.logger.info(
+            f"resumed from {path}: continuing at epoch {self.start_epoch}, "
+            f"best {self.ckpt.monitor}={self.ckpt.best}, ema_updates="
+            f"{self.model_ema.updates if self.model_ema is not None else '-'}")
+        return self.start_epoch
 
     def _eval_model(self):
         """Evaluate the EMA weights when weight-EMA is on, else the raw model."""
