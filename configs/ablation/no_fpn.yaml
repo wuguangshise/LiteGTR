@@ -1,2 +1,0 @@
-_base_: [../models/model_main.yaml]
-model: {neck: {use_fpn: false}}

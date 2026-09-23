@@ -14,15 +14,13 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from models.build import build_model, load_config  # noqa: E402
+from models.build import build_model  # noqa: E402
+from tests._variants import variant_cfg  # noqa: E402
 from models.token.ema_token_router import bn_batch_stats_only, photometric_view  # noqa: E402
 
 
-def _model(path, **token_overrides):
-    cfg = load_config(path)
-    cfg["model"]["num_classes"] = 10
-    cfg["model"]["token"].update(token_overrides)
-    return build_model(cfg).train()
+def _model(variant: str):
+    return build_model(variant_cfg(variant)).train()
 
 
 def _targets():
@@ -42,7 +40,7 @@ def _scorer_grad(model) -> float:
 def test_scorer_learns_from_the_detection_loss_alone():
     """The regression test for defect 1. EMA is OFF, so the ONLY route into the
     scorer is the detection loss through the score gate."""
-    model = _model("configs/ablation/no_ema_routing.yaml")
+    model = _model("no_ema")
     losses = model.loss(torch.randn(2, 3, 256, 256), _targets())
     assert "loss_token" not in losses
     sum(losses.values()).backward()
@@ -50,9 +48,9 @@ def test_scorer_learns_from_the_detection_loss_alone():
 
 
 def test_random_routing_leaves_the_scorer_untrained():
-    """Without the gate and without EMA nothing reaches the scorer -- which is
-    exactly what makes random_routing.yaml a clean random baseline."""
-    model = _model("configs/ablation/random_routing.yaml")
+    """Without the gate and without EMA nothing reaches the scorer, so selection
+    is effectively random -- the baseline a reviewer asks for."""
+    model = _model("random_routing")
     sum(model.loss(torch.randn(2, 3, 256, 256), _targets()).values()).backward()
     assert _scorer_grad(model) == 0.0
 
@@ -72,7 +70,7 @@ def test_photometric_view_changes_appearance_not_geometry():
 
 
 def test_teacher_sees_a_different_view_than_the_student():
-    model = _model("configs/models/model_main.yaml")
+    model = _model("main")
     x = torch.randn(2, 3, 256, 256)
     feats = model.neck(model.backbone(x))
     feats = model.local_path(feats)
@@ -82,13 +80,13 @@ def test_teacher_sees_a_different_view_than_the_student():
 
 
 def test_same_view_ablation_really_is_the_same_input():
-    model = _model("configs/ablation/ema_same_view.yaml")
+    model = _model("ema_same_view")
     tok_in = {"P3": torch.randn(1, 64, 8, 8)}
     assert model._teacher_inputs(torch.randn(1, 3, 64, 64), tok_in) is tok_in
 
 
 def test_teacher_branch_leaves_batchnorm_running_stats_untouched():
-    model = _model("configs/models/model_main.yaml")
+    model = _model("main")
     bns = [m for m in model.modules() if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)]
     assert bns, "expected BatchNorm layers in neck / local path"
     before = [(m.running_mean.clone(), m.running_var.clone()) for m in bns]
@@ -108,7 +106,7 @@ def test_backward_succeeds_with_the_photometric_teacher():
     (and then copy_() them back) between the student's forward and backward,
     which fails with 'modified by an inplace operation: [torch.cuda.FloatTensor
     [64]]'. A full loss + backward on the main config must not raise."""
-    model = _model("configs/models/model_main.yaml")
+    model = _model("main")
     losses = model.loss(torch.randn(2, 3, 256, 256), _targets())
     sum(losses.values()).backward()
 
@@ -134,7 +132,7 @@ def test_bn_batch_stats_only_restores_the_flag_on_exception():
 
 
 def test_consistency_loss_is_live_under_the_photometric_view():
-    model = _model("configs/models/model_main.yaml")
+    model = _model("main")
     losses = model.loss(torch.randn(2, 3, 256, 256), _targets())
     assert "loss_token" in losses
     assert torch.isfinite(losses["loss_token"]) and float(losses["loss_token"]) > 0

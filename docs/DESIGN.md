@@ -56,10 +56,10 @@ backbone exceeds 60% of deployment parameters.
 (`p2_stacked_convs: 1`) while P3–P5 get the full stack, and the final 1×1
 predictors are **shared across levels**. P2 also feeds the local CNN path only —
 it is excluded from token selection and writeback (`token.levels: [P3,P4,P5]`).
-`configs/ablation/no_p2.yaml` switches the whole branch off.
+`use_p2: false` switches the whole branch off (exercised in `tests/_variants.py`).
 
 ### P0-3 Token budget is a variable, and it is swept first
-`configs/ablation/token_budget_{56,128,256,512}.yaml`.
+`configs/ablation/token_budget_256.yaml`, compared against the main model's 56.
 
 The risk being managed: VisDrone averages ~53 objects per image and exceeds 300
 in dense scenes, and P3 at 640 input is 80×80 = 6400 positions. A 56-token
@@ -114,12 +114,12 @@ into the statistics used at validation.
 (spatial-softmax KL); `top-k` never enters the graph, train and inference run the
 identical selection, and the teacher is stripped from `deploy_state_dict()`.
 
-| config | score_gate | EMA view | what it isolates |
+| setting | score_gate | EMA view | what it isolates |
 |---|---|---|---|
-| `ablation/random_routing` | off | off | is learned selection better than random? |
+| random routing *(test variant)* | off | off | is learned selection better than random? |
 | `ablation/no_ema_routing` | on | off | learned routing, no consistency |
 | `models/model_main` | on | photometric | + illumination-invariant routing |
-| `ablation/ema_same_view` | on | same | shows why the asymmetric view is needed |
+| same-view EMA *(test variant)* | on | same | shows why the asymmetric view is needed |
 
 ### P0-5 DroneVehicle: read the XML, rewrite nothing
 
@@ -247,7 +247,7 @@ so a baseline cannot silently drift out of the protocol.
 | | |
 |---|---|
 | **P2-11** | `datasets/metrics.py` holds metric *definitions*; `engine/evaluator.py` holds the *loop*. No more duplicate `evaluator.py`. |
-| **P2-12** | `neck.use_fpn` defaults **true**. Pure 1×1 projection does no cross-scale fusion and costs small-object AP; `configs/ablation/no_fpn.yaml` measures it. |
+| **P2-12** | `neck.use_fpn` defaults **true**. Pure 1×1 projection does no cross-scale fusion and costs small-object AP; `use_fpn: false` measures it (exercised in `tests/_variants.py`). |
 | **P2-13** | `models/build.py` — YAML-driven construction with deep `_base_` merging. Ablations flip a key; no code is edited. |
 | **P2-14** | `tools/run_seeds.py` — 3 seeds, reports mean ± std. |
 | **P2-15** | `datasets/builder.py` — dataset factory extracted, so building VisDrone no longer imports the DroneVehicle module. |
@@ -274,26 +274,31 @@ DataLoader workers.
 
 ## 6. Experiment matrix
 
-Every ablation lives in `configs/ablation/` and changes exactly one variable relative to
-`models/model_main.yaml`. `configs/ablation/README.md` indexes them by paper table with the
-question each one answers and a suggested run order.
+### The four ablations the paper needs
+
+Each changes exactly one variable relative to `models/model_main.yaml`; one per claim,
+plus one design check. They are the only files in `configs/ablation/`.
+
+| # | config | proves | why it is essential |
+|---|---|---|---|
+| 1 | `ablation/no_global_token` | the token path works at all | the premise of the paper. Also serves as the TinyNeXt-without-tokens baseline row |
+| 2 | `ablation/no_geometric_writeback` | the geometric prior (primary contribution) | drops only the Gaussian term, keeps content attention -- isolates the claim exactly |
+| 3 | `ablation/no_ema_routing` | illumination-consistent routing | direct evidence for the asymmetric-view EMA constraint |
+| 4 | `ablation/token_budget_256` | 56 tokens are enough | the largest known risk (P0-3). If 256 is clearly better, the MAIN model changes |
+
+### Other runs
 
 | group | config | question |
 |---|---|---|
-| Main vs baselines | `models/model_main.yaml` | accuracy at equal params/FLOPs |
-| Token budget | `ablation/token_budget_*` | **does the curve have a knee at all?** |
-| No global token | `ablation/no_global_token` | does global modelling matter |
-| No local CNN | `ablation/no_local_cnn` | does the local path matter |
-| No P2 | `ablation/no_p2` | is the high-res branch worth its MACs |
-| Writeback mode | `no_geometric_writeback`, `broadcast_writeback` | **isolates the primary claim** |
-| No FPN | `ablation/no_fpn` | cross-scale fusion value |
-| Token source levels | `ablation/token_src_p5`, `token_src_p4p5` | do the finer levels need to contribute tokens? (budget and write-back fixed) |
-| Routing locality | `ablation/global_topk_routing` | does local candidate routing matter vs. one global top-k? |
-| Token interaction | `ablation/mixer_none`, `mixer_deep` | **does token-to-token attention matter**; is Transformer capacity the bottleneck? |
-| Write-back into P2 | `ablation/writeback_p2` | does global context help at stride 4, where small objects live? |
-| Random routing | `ablation/random_routing` | **is learned selection better than random?** |
-| No EMA routing | `ablation/no_ema_routing` | value of the photometric consistency term |
-| Same-view EMA | `ablation/ema_same_view` | why the asymmetric view is necessary |
-| Cross-illumination | `datasets/dronevehicle_rgb` | day / night / dark breakdown |
-| Token × condition | `no_global_token` on DroneVehicle | **does global context matter more at night?** |
+| Main vs baselines | `baselines/csp_n`, `baselines/csp_t` | accuracy at equal params/FLOPs, identical protocol |
+| Second scale point | `models/model_edge_s` | does the design hold at ~1M backbone params? |
+| Cross-illumination | #1 and #3 on `datasets/dronevehicle_rgb` | **does global context / photometric consistency matter more at night?** No new config -- same ablations, second dataset |
 | Seeds | `tools/run_seeds.py` | mean ± std over 3 seeds |
+
+### Code paths without a shipped config
+
+Removing P2, removing FPN, mixer depth, routing locality, token source levels,
+write-back into P2, random routing and same-view EMA all remain supported and are
+exercised by `tests/_variants.py`. To run one as an experiment, write a
+three-line YAML inheriting `../models/model_main.yaml` with the matching override
+from that file.

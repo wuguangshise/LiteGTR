@@ -4,34 +4,36 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from models.build import build_model, load_config  # noqa: E402
+from tests._variants import VARIANTS, variant_cfg  # noqa: E402
 
-CONFIGS = [
+# Every shipped config file, so a broken YAML is caught...
+CONFIG_FILES = [
     "configs/models/model_main.yaml",
     "configs/models/model_edge_s.yaml",
     "configs/ablation/no_global_token.yaml",
-    "configs/ablation/no_local_cnn.yaml",
-    "configs/ablation/no_p2.yaml",
-    "configs/ablation/no_fpn.yaml",
     "configs/ablation/no_geometric_writeback.yaml",
-    "configs/ablation/broadcast_writeback.yaml",
-    "configs/ablation/token_budget_128.yaml",
-    "configs/ablation/mixer_none.yaml",
-    "configs/ablation/mixer_deep.yaml",
-    "configs/ablation/global_topk_routing.yaml",
-    "configs/ablation/token_src_p5.yaml",
-    "configs/ablation/token_src_p4p5.yaml",
-    "configs/ablation/writeback_p2.yaml",
-    "configs/ablation/random_routing.yaml",
     "configs/ablation/no_ema_routing.yaml",
-    "configs/ablation/ema_same_view.yaml",
+    "configs/ablation/token_budget_256.yaml",
 ]
+# ...and every code path, whether or not the paper runs it as an ablation.
+CASES = [("file", f) for f in CONFIG_FILES] + [("variant", v) for v in VARIANTS]
 
 
-@pytest.mark.parametrize("path", CONFIGS)
-def test_forward_shapes(path):
-    cfg = load_config(path)
+def _cfg(kind: str, ref: str) -> dict:
+    if kind == "variant":
+        return variant_cfg(ref)
+    cfg = load_config(ref)
     cfg["model"]["num_classes"] = 10
-    model = build_model(cfg).eval()
+    return cfg
+
+
+def _id(case):
+    return f"{case[0]}:{case[1].split('/')[-1]}"
+
+
+@pytest.mark.parametrize("case", CASES, ids=_id)
+def test_forward_shapes(case):
+    model = build_model(_cfg(*case)).eval()
     x = torch.randn(2, 3, 256, 256)
     with torch.no_grad():
         cls, reg, feats = model(x)
@@ -42,11 +44,9 @@ def test_forward_shapes(path):
         assert r.shape[1] == 4 * (model.head.reg_max + 1)
 
 
-@pytest.mark.parametrize("path", CONFIGS)
-def test_loss_backward(path):
-    cfg = load_config(path)
-    cfg["model"]["num_classes"] = 10
-    model = build_model(cfg).train()
+@pytest.mark.parametrize("case", CASES, ids=_id)
+def test_loss_backward(case):
+    model = build_model(_cfg(*case)).train()
     x = torch.randn(2, 3, 256, 256)
     targets = [
         {"boxes": torch.tensor([[20.0, 20.0, 60.0, 60.0], [100.0, 90.0, 130.0, 140.0]]),

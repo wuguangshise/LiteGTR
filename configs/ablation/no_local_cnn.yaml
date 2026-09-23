@@ -1,2 +1,0 @@
-_base_: [../models/model_main.yaml]
-model: {use_local_cnn: false}

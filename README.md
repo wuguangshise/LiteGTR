@@ -70,17 +70,16 @@ python tools/visualize_labels.py --config configs/datasets/dronevehicle_rgb.yaml
 Open `runs/label_check/`. Boxes must sit **on** the vehicles. A border offset that
 was never applied does not raise an error — it just trains a wrong model.
 
-**4. Sweep the token budget before the main experiment.**
+**4. Check the token budget early.**
 
 ```bash
-for b in 56 128 256 512; do
-  python tools/train.py --config configs/datasets/visdrone_rgb.yaml \
-      configs/ablation/token_budget_$b.yaml --name vd_budget_$b
-done
+python tools/train.py --config configs/datasets/visdrone_rgb.yaml \
+    configs/ablation/token_budget_256.yaml --name vd_budget_256
 ```
 
-If accuracy is flat across budgets, the global path is not earning its place —
-fix that before running anything else.
+Compare against the main model (56 tokens). If 256 is clearly better, the main
+model should use more tokens — find that out before the rest of the ablations.
+The four ablations the paper needs are indexed in `configs/ablation/README.md`.
 
 **5. Train, compare against baselines, evaluate, export.**
 

@@ -12,7 +12,7 @@ Design constraints (docs/DESIGN.md P0-3, P1-8):
   spatially distributed, which matters on VisDrone where a single image holds
   ~53 objects on average and 300+ in dense scenes.
 * **Budget is a config value, never a constant.** ``tools/train.py`` sweeps it
-  via ``configs/ablation/token_budget_*.yaml`` before any main experiment.
+  against ``configs/ablation/token_budget_256.yaml`` early on.
 
 Returns both token features and their *geometry* (normalised centre + level),
 which ``geometric_writeback`` consumes.
