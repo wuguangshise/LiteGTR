@@ -113,9 +113,8 @@ def run_profile(cfg_paths: list[str], imgsz: int, out: str | None, batch: int) -
     lines.append("")
     lines.append(f"param budget [{human(lo)}, {human(hi)}] -> {verdict}")
     if macs:
-        lines.append(f"MACs @{imgsz}: {human(macs)}  "
-                     f"(the original 5G target was set before P2 cost was measured; "
-                     f"see docs/DESIGN.md P0-2)")
+        lines.append(f"MACs @{imgsz}: {human(macs)}  (thop excludes the attention matmuls "
+                     f"q@k and attn@v; add ~0.06G at 640 for Main)")
 
     text = "\n".join(lines)
     print(text)

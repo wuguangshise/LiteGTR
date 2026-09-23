@@ -37,10 +37,28 @@ Two things the original plan could not have known without running this:
    P2 is 160×160, and a single 3×3 conv at 64 channels there costs ≈0.94G MACs;
    two stem convs plus a head on P2 approaches 2G on their own.
 
-**Conclusion: the "≈5G MACs @640" target is not attainable with a genuine P2
-branch.** Either state a realistic figure (≈8–10G MACs / 16–20 GFLOPs, still
-YOLOv8n-class) or drop P2. The code keeps P2 and makes it cheap; `tools/profile_model.py`
-prints the real number so the paper never quotes an aspirational one.
+### Measured, full model (CI, `tools/profile_model.py`, thop, 640×640)
+
+| model | deploy params | MACs | FLOPs |
+|---|---|---|---|
+| **Main** | **2.33M** | **4.93G** | ~9.9G |
+| **Edge-S** | 1.22M | 2.49G | ~5.0G |
+
+Main's parameters by module: backbone 2.03M, head 74K, token selector 56K,
+write-back 50K, neck 47K, local path 34K, mixer 34K. The EMA teacher (56K) is
+training-only and excluded from deployment.
+
+thop does not count the attention matmuls (`q@k`, `attn@v`). They add roughly
+0.06G at 640 input -- about 5.0G MACs in total. State this in the paper next to
+the FLOPs column.
+
+**Correction.** An earlier version of this section concluded that ≈5G MACs was
+unattainable with a genuine P2 branch and recommended quoting 8–10G. That was an
+*estimate* -- it put the P2 head alone at ~2G. The measurement shows neck, head,
+local path and token path together cost 1.33G: P2 has a single
+depthwise-separable stem and the predictors are shared across levels. **The
+original ≈5G MACs / ≈10 GFLOPs target is met.** For context, YOLOv8n is 3.2M
+params / 8.7 GFLOPs; Main has fewer parameters and slightly more FLOPs.
 
 ---
 
