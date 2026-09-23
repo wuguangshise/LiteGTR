@@ -102,7 +102,7 @@ def foreign_run(run_dir: Path, cfg_path: str, token_budget=None) -> str:
     want = load_config(REPO / cfg_path)
     if _model_cfg(saved["model"]) != _model_cfg(want["model"], token_budget):
         return f"last.pt 的模型配置和 {cfg_path} 不一致，是别的实验"
-    # 分配器和损失也算实验定义：修复前（没有 tiny_fallback）的训练不能被当成同一个实验续训
+    # 分配器和损失也算实验定义：修复前（没有 STAL）的训练不能被当成同一个实验续训
     for key in ("assigner", "loss"):
         if saved.get(key, {}) != want.get(key, {}):
             return f"last.pt 的 {key} 配置和当前代码不一致（多半是修复前的旧训练）"

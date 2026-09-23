@@ -239,7 +239,7 @@ class LiteGTR(nn.Module):
     @torch.no_grad()
     def predict(self, images: torch.Tensor, score_thr: float = 0.02, nms_iou: float = 0.6,
                 max_det: int = 500, pre_nms: int = 3000, agnostic: bool = False,
-                containment: float | None = None) -> list[dict]:
+                containment: float | None = None, multi_label: bool = False) -> list[dict]:
         """Decoded, NMS-filtered detections per image.
 
         ``agnostic`` runs one NMS over all classes: on VisDrone a person is often
@@ -247,13 +247,15 @@ class LiteGTR(nn.Module):
         ``containment`` additionally drops a box when a higher-scoring kept box of the
         same class (any class if ``agnostic``) covers at least that fraction of its
         area: nested boxes on one tall object have IoU = small/large area, which falls
-        below ``nms_iou`` and survives plain NMS. Defaults reproduce standard GFL
-        post-processing; tools/diagnose_predictions.py measures the alternatives.
+        below ``nms_iou`` and survives plain NMS. ``multi_label`` lets one location
+        emit every class above ``score_thr`` instead of only its best one (mmyolo /
+        Ultralytics evaluation). The evaluation protocol lives in the ``test:`` config
+        block; tools/diagnose_predictions.py measures the alternatives.
         """
         cls_scores, bbox_preds, feats = self(images)
         cls, _, boxes, _, _ = self.head.decode(cls_scores, bbox_preds, feats)
         return [postprocess(s, bx, images.shape[-2:], score_thr, nms_iou, max_det, pre_nms,
-                            agnostic, containment)
+                            agnostic, containment, multi_label)
                 for s, bx in zip(cls.sigmoid(), boxes)]
 
     # ----------------------------------------------------------------- utils
@@ -281,12 +283,16 @@ class LiteGTR(nn.Module):
 def postprocess(scores: torch.Tensor, boxes: torch.Tensor, hw: tuple[int, int],
                 score_thr: float = 0.02, nms_iou: float = 0.6, max_det: int = 500,
                 pre_nms: int = 3000, agnostic: bool = False,
-                containment: float | None = None) -> dict:
+                containment: float | None = None, multi_label: bool = False) -> dict:
     """One image: ``scores`` (L, C) probabilities, ``boxes`` (L, 4) xyxy -> detections."""
     h, w = hw
-    s_max, labels = scores.max(-1)
-    keep = s_max > score_thr
-    s_max, labels, bx = s_max[keep], labels[keep], boxes[keep].clone()
+    if multi_label:
+        loc, labels = (scores > score_thr).nonzero(as_tuple=True)
+        s_max, bx = scores[loc, labels], boxes[loc].clone()
+    else:
+        s_max, labels = scores.max(-1)
+        keep = s_max > score_thr
+        s_max, labels, bx = s_max[keep], labels[keep], boxes[keep].clone()
     if s_max.numel() > pre_nms:
         topv, topi = s_max.topk(pre_nms)
         s_max, labels, bx = topv, labels[topi], bx[topi]

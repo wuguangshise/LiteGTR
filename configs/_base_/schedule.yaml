@@ -33,19 +33,25 @@ loss:
   token_hard_ratio: 1.0   # <1.0 keeps only the hardest positions
 
 # Post-processing for every evaluation (training-time val, tools/val.py, test.py, submit).
-# Changing it never needs retraining: run tools/diagnose_predictions.py on a checkpoint to
-# compare variants on the real val set, then set the winner here and re-run tools/val.py.
+# Defaults follow the protocol of the detectors we compare with -- RemDet (mmyolo) and
+# Ultralytics YOLO val: score 0.001, class-wise NMS at IoU 0.7, multi-label, 300 boxes.
+# This is an mAP protocol (maximise recall); it is NOT for drawing -- figures filter at
+# score >= 0.25 like every detector's predict mode, so a drawing from these boxes is busy.
+# Never needs retraining: tools/diagnose_predictions.py compares variants on a checkpoint.
 test:
-  score_thr: 0.02
-  nms_iou: 0.6
-  max_det: 500
-  agnostic: false         # true: one NMS across classes (pedestrian/people duplicates)
+  score_thr: 0.001
+  nms_iou: 0.7
+  max_det: 300
+  multi_label: true       # a location may output several classes (pedestrian AND people)
+  agnostic: false         # true: one NMS across classes
   containment: null       # e.g. 0.8: drop a box >= 80% covered by a higher-scoring one
 
 assigner:
   topk: 13
   alpha: 1.0
   beta: 6.0
-  # GTs that contain no grid centre get their nearest P2 point (assigners/task_aligned_assigner.py).
-  # Without it ~10% of VisDrone boxes at 640 input -- the smallest ones -- are never positives.
-  tiny_fallback: true
+  # STAL (Ultralytics YOLO26): for candidate selection a GT side shorter than this many
+  # pixels is widened to it, so a box narrower than the P2 stride still has candidates.
+  # Ultralytics uses stride[1] -- 8 px for a P2-P5 head. 0 = plain inside-the-box rule,
+  # under which ~10% of VisDrone boxes at 640 input are never positives.
+  stal_size: 8

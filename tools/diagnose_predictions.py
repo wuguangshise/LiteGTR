@@ -3,15 +3,15 @@
 Three questions, one pass over the data, no retraining:
 
 1. **Assignment coverage** (no weights needed). How many GT boxes contain no
-   candidate point and therefore can never become positives -- the defect that
-   ``assigner.tiny_fallback`` fixes. Reported by object size at the network input.
+   candidate point and therefore can never become positives, under the plain
+   inside-the-box rule and under STAL (``assigner.stal_size``). By object size.
 2. **What each drawn box is.** Every prediction at or above ``--conf`` (the
    threshold ``val_predictions/`` draws with) is classified, greedily by score:
    correct, duplicate of an already-found object of the same class, right place
    but wrong class (VisDrone's pedestrian / people), poorly localised, background.
-3. **Post-processing sweep.** The same raw predictions under several NMS variants
-   (IoU threshold, class-agnostic, containment suppression): mAP, AP_S and boxes
-   per image. Post-processing never needs retraining -- pick the variant here.
+3. **Post-processing sweep.** The same raw predictions under several variants
+   (score threshold, single/multi-label, NMS IoU, class-agnostic, containment):
+   mAP, AP_S and boxes per image. Never needs retraining -- pick the variant here.
 
     python tools/diagnose_predictions.py --config configs/datasets/visdrone_rgb.yaml \\
         configs/models/model_main.yaml --weights runs/train/main/weights/best.pt \\
@@ -40,14 +40,14 @@ from models.build import build_model, load_config  # noqa: E402
 from models.detector import postprocess  # noqa: E402
 from models.head.gfl_head import GFLHead  # noqa: E402
 
-# (name, nms_iou, agnostic, containment)
+# (name, score_thr, nms_iou, multi_label, agnostic, containment)
 VARIANTS = [
-    ("class-wise NMS 0.6 (current)", 0.6, False, None),
-    ("class-wise NMS 0.5", 0.5, False, None),
-    ("class-wise NMS 0.7", 0.7, False, None),
-    ("class-agnostic NMS 0.6", 0.6, True, None),
-    ("class-wise 0.6 + containment 0.8", 0.6, False, 0.8),
-    ("class-agnostic 0.6 + containment 0.8", 0.6, True, 0.8),
+    ("old: 1-label, s>0.02, NMS 0.6", 0.02, 0.6, False, False, None),
+    ("RemDet/Ultralytics: multi, s>0.001, NMS 0.7", 0.001, 0.7, True, False, None),
+    ("multi, s>0.001, NMS 0.6", 0.001, 0.6, True, False, None),
+    ("multi, s>0.001, NMS 0.7 + contain 0.8", 0.001, 0.7, True, False, 0.8),
+    ("1-label, s>0.001, NMS 0.7", 0.001, 0.7, False, False, None),
+    ("1-label agnostic NMS 0.6 + contain 0.8", 0.02, 0.6, False, True, 0.8),
 ]
 SIZE_BINS = [(0, 4), (4, 8), (8, 16), (16, 32), (32, 1e9)]
 
@@ -58,15 +58,22 @@ def _bin_name(lo, hi):
 
 # ------------------------------------------------------------------ coverage
 def coverage(gt_boxes: torch.Tensor, points: torch.Tensor, strides: torch.Tensor,
-             reg_max: int) -> torch.Tensor:
-    """True for each GT that has at least one candidate point (inside, in range)."""
+             reg_max: int, stal_size: float = 0.0) -> torch.Tensor:
+    """True for each GT with at least one candidate point. Mirrors the candidate rule in
+    assigners/task_aligned_assigner.py (inside the box -- widened to ``stal_size`` if
+    STAL is on -- and within the DFL regression range)."""
     if gt_boxes.numel() == 0:
         return torch.zeros(0, dtype=torch.bool)
-    lt = points[:, None, :] - gt_boxes[None, :, :2]
-    rb = gt_boxes[None, :, 2:] - points[:, None, :]
-    ltrb = torch.cat([lt, rb], -1)
-    inside = (ltrb.min(-1).values > 0) & ((ltrb / strides[:, None, None]).max(-1).values <= reg_max)
-    return inside.any(0)
+    ltrb = torch.cat([points[:, None, :] - gt_boxes[None, :, :2],
+                      gt_boxes[None, :, 2:] - points[:, None, :]], -1)
+    if stal_size > 0:
+        ctr = (gt_boxes[:, :2] + gt_boxes[:, 2:]) * 0.5
+        half = (gt_boxes[:, 2:] - gt_boxes[:, :2]).clamp_min(stal_size) * 0.5
+        sel = torch.cat([points[:, None, :] - (ctr - half)[None], (ctr + half)[None] - points[:, None, :]], -1)
+    else:
+        sel = ltrb
+    ok = (sel.min(-1).values > 0) & ((ltrb / strides[:, None, None]).max(-1).values <= reg_max)
+    return ok.any(0)
 
 
 # ------------------------------------------------------------------ box types
@@ -144,7 +151,8 @@ def main() -> None:
     reg_max = model.head.reg_max
 
     loader = DataLoader(ds, batch_size=a.batch, shuffle=False, collate_fn=collate_fn, num_workers=0)
-    cov_n = np.zeros(len(SIZE_BINS)); cov_miss = np.zeros(len(SIZE_BINS))
+    stal = float(cfg.get("assigner", {}).get("stal_size", 0) or 8)
+    cov_n = np.zeros(len(SIZE_BINS)); miss_plain = np.zeros(len(SIZE_BINS)); miss_stal = np.zeros(len(SIZE_BINS))
     cache = []                                  # per image: candidate scores/boxes + GT
     for images, targets in loader:
         if a.weights:
@@ -153,57 +161,62 @@ def main() -> None:
             probs = cls.sigmoid()
         for i, t in enumerate(targets):
             gt_b, gt_l = t["boxes"], t["labels"]
-            has = coverage(gt_b, points, strides, reg_max)
+            plain = coverage(gt_b, points, strides, reg_max)
+            withs = coverage(gt_b, points, strides, reg_max, stal)
             side = ((gt_b[:, 2] - gt_b[:, 0]) * (gt_b[:, 3] - gt_b[:, 1])).clamp_min(0).sqrt()
             for k, (lo, hi) in enumerate(SIZE_BINS):
                 m = (side >= lo) & (side < hi)
-                cov_n[k] += int(m.sum()); cov_miss[k] += int((m & ~has).sum())
+                cov_n[k] += int(m.sum())
+                miss_plain[k] += int((m & ~plain).sum()); miss_stal[k] += int((m & ~withs).sum())
             if a.weights:
                 s = probs[i]
-                keep = s.max(-1).values > 0.02
-                s, bx = s[keep], boxes[i][keep]
-                if len(s) > 3000:
-                    top = s.max(-1).values.topk(3000).indices
+                smax = s.max(-1).values
+                keep = smax > 0.001
+                s, bx, smax = s[keep], boxes[i][keep], smax[keep]
+                if len(s) > 3000:                   # top locations; multi-label draws from these
+                    top = smax.topk(3000).indices
                     s, bx = s[top], bx[top]
                 cache.append((s.float().cpu(), bx.float().cpu(), gt_b.numpy(), gt_l.numpy()))
 
+    tot = max(cov_n.sum(), 1)
     lines = [f"split={a.split}  images={len(ds)}  input={size}px", "",
-             "[1] GT boxes with NO candidate point (never a positive without assigner.tiny_fallback)"]
+             f"[1] GT boxes with NO candidate point (never a positive)   plain rule | STAL {stal:g}px"]
     for k, (lo, hi) in enumerate(SIZE_BINS):
         n = int(cov_n[k])
-        lines.append(f"    side {_bin_name(lo, hi):>9s}: {n:7d} GT ({100 * n / max(cov_n.sum(), 1):5.1f}%)"
-                     f"   uncovered {100 * cov_miss[k] / max(n, 1):5.1f}%")
-    lines.append(f"    total uncovered: {100 * cov_miss.sum() / max(cov_n.sum(), 1):.1f}% of all GT")
+        lines.append(f"    side {_bin_name(lo, hi):>9s}: {n:7d} GT ({100 * n / tot:5.1f}%)   "
+                     f"uncovered {100 * miss_plain[k] / max(n, 1):5.1f}% | {100 * miss_stal[k] / max(n, 1):5.1f}%")
+    lines.append(f"    total uncovered: {100 * miss_plain.sum() / tot:.1f}% | {100 * miss_stal.sum() / tot:.1f}% of all GT")
 
     rows = []
     if a.weights:
         h = w = size
-        lines += ["", f"[2]+[3] post-processing variants (boxes drawn at score >= {a.conf})",
-                  f"    {'variant':38s} {'mAP50:95':>8s} {'mAP50':>6s} {'AP_S':>6s} {'box/img':>7s} "
+        lines += ["", f"[2]+[3] post-processing variants (box types counted at score >= {a.conf})",
+                  f"    {'variant':44s} {'mAP50:95':>8s} {'mAP50':>6s} {'AP_S':>6s} {'box/img':>7s} "
                   f"{'GT/img':>6s} {'correct':>7s} {'dup':>6s} {'wrongcls':>8s} {'loc':>6s} {'bg':>6s}"]
         n_img = len(cache)
         n_gt = sum(len(c[2]) for c in cache)
-        for name, iou, agn, cont in VARIANTS:
+        for name, thr, iou, multi, agn, cont in VARIANTS:
             metric = COCOMeanAP(ds.classes)
             types = {"correct": 0, "duplicate": 0, "wrong_class": 0, "localisation": 0, "background": 0}
             drawn = 0
             for img_id, (s, bx, gt_b, gt_l) in enumerate(cache):
-                p = postprocess(s, bx, (h, w), 0.02, iou, 500, 3000, agn, cont)
+                p = postprocess(s, bx, (h, w), thr, iou, 300, 30000, agn, cont, multi)
                 db, dsc, dl = p["boxes"].numpy(), p["scores"].numpy(), p["labels"].numpy()
                 metric.add(img_id, h, w, "day", gt_b, gt_l, db, dsc, dl)
                 drawn += int((dsc >= a.conf).sum())
                 for k2, v in box_types(db, dsc, dl, gt_b, gt_l, a.conf).items():
                     types[k2] += v
             m = metric.evaluate()
-            tot = max(sum(types.values()), 1)
-            row = {"variant": name, "nms_iou": iou, "agnostic": agn, "containment": cont,
+            tt = max(sum(types.values()), 1)
+            row = {"variant": name, "score_thr": thr, "nms_iou": iou, "multi_label": multi,
+                   "agnostic": agn, "containment": cont,
                    "mAP50_95": m["mAP50_95"], "mAP50": m["mAP50"], "AP_small": m["AP_small"],
                    "boxes_per_img": drawn / n_img, "gt_per_img": n_gt / n_img,
-                   **{f"frac_{k2}": v / tot for k2, v in types.items()}}
+                   **{f"frac_{k2}": v / tt for k2, v in types.items()}}
             rows.append(row)
-            lines.append(f"    {name:38s} {m['mAP50_95']:8.4f} {m['mAP50']:6.4f} {m['AP_small']:6.4f} "
+            lines.append(f"    {name:44s} {m['mAP50_95']:8.4f} {m['mAP50']:6.4f} {m['AP_small']:6.4f} "
                          f"{drawn / n_img:7.1f} {n_gt / n_img:6.1f} "
-                         + " ".join(f"{100 * types[k2] / tot:6.1f}%" for k2 in
+                         + " ".join(f"{100 * types[k2] / tt:6.1f}%" for k2 in
                                     ("correct", "duplicate", "wrong_class", "localisation", "background")))
         best = max(rows, key=lambda r: r["mAP50_95"])
         lines += ["", f"    best mAP50:95: {best['variant']}",

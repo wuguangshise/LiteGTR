@@ -15,41 +15,41 @@ def _points(size=160):
     return GFLHead.make_points(feats, (4, 8, 16, 32), "cpu", torch.float32)
 
 
-# ------------------------------------------------------------ tiny fallback
-def test_tiny_gt_between_grid_centres_gets_a_positive_only_with_fallback():
+# ------------------------------------------------------------ STAL
+def test_tiny_gt_between_grid_centres_gets_candidates_only_with_stal():
     pts, st = _points()
     gt = torch.tensor([[2.2, 2.2, 3.8, 3.8], [40.0, 40.0, 60.0, 80.0]])   # 1.6 px box: no centre inside
     lab = torch.tensor([0, 3])
     pred = torch.cat([pts - 32, pts + 32], 1)
     sc = torch.full((len(pts), 10), 0.01)
     assert not bool(coverage(gt, pts, st, 16)[0])
-    old = TaskAlignedAssigner(tiny_fallback=False)(sc, pred, pts, gt, lab, point_strides=st, reg_max=16)
-    new = TaskAlignedAssigner(tiny_fallback=True)(sc, pred, pts, gt, lab, point_strides=st, reg_max=16)
+    assert bool(coverage(gt, pts, st, 16, stal_size=8)[0])
+    old = TaskAlignedAssigner(stal_size=0)(sc, pred, pts, gt, lab, point_strides=st, reg_max=16)
+    new = TaskAlignedAssigner(stal_size=8)(sc, pred, pts, gt, lab, point_strides=st, reg_max=16)
     assert int((old["assigned_gt"][old["fg_mask"]] == 0).sum()) == 0
     pos = new["fg_mask"] & (new["assigned_gt"] == 0)
-    assert int(pos.sum()) == 1
-    assert pts[pos][0].tolist() == [2.0, 2.0]             # nearest P2 centre
-    assert st[pos][0] == 4
-    assert float(new["assigned_ious"][pos][0]) >= 0.1     # trainable target / regression weight
+    # the 8x8 selection window around (3, 3) holds P2 centres (2|6, 2|6) and the P3 centre (4, 4)
+    assert int(pos.sum()) == 5
+    assert set(map(tuple, pts[pos].tolist())) == {(2.0, 2.0), (2.0, 6.0), (6.0, 2.0), (6.0, 6.0), (4.0, 4.0)}
 
 
-def test_fallback_leaves_normal_gts_untouched():
+def test_stal_leaves_gts_larger_than_its_size_untouched():
     pts, st = _points()
     gt = torch.tensor([[40.0, 40.0, 60.0, 80.0], [100.0, 20.0, 130.0, 70.0]])
     lab = torch.tensor([3, 0])
     torch.manual_seed(0)
     pred = torch.cat([pts - 10, pts + 10], 1) + torch.rand(len(pts), 4)
     sc = torch.rand(len(pts), 10)
-    a = TaskAlignedAssigner(tiny_fallback=False)(sc, pred, pts, gt, lab, point_strides=st, reg_max=16)
-    b = TaskAlignedAssigner(tiny_fallback=True)(sc, pred, pts, gt, lab, point_strides=st, reg_max=16)
+    a = TaskAlignedAssigner(stal_size=0)(sc, pred, pts, gt, lab, point_strides=st, reg_max=16)
+    b = TaskAlignedAssigner(stal_size=8)(sc, pred, pts, gt, lab, point_strides=st, reg_max=16)
     for k in a:
         assert torch.equal(a[k], b[k]), k
 
 
-def test_main_config_enables_the_fallback():
+def test_main_config_enables_stal():
     from models.build import build_model
     from tests._variants import variant_cfg
-    assert build_model(variant_cfg("main")).assigner.tiny_fallback
+    assert build_model(variant_cfg("main")).assigner.stal_size == 8
 
 
 # ------------------------------------------------------------ post-processing
@@ -75,6 +75,15 @@ def test_containment_removes_a_nested_box_that_plain_nms_keeps():
     assert len(postprocess(s, boxes, (640, 640))["boxes"]) == 2
     kept = postprocess(s, boxes, (640, 640), containment=0.8)
     assert len(kept["boxes"]) == 1 and float(kept["scores"][0]) == pytest.approx(0.8)
+
+
+def test_multi_label_emits_every_class_above_threshold():
+    boxes = torch.tensor([[10.0, 10, 30, 60]])
+    s = torch.zeros(1, 10)
+    s[0, 0], s[0, 1] = 0.5, 0.3                               # pedestrian 0.5, people 0.3
+    assert postprocess(s, boxes, (640, 640), score_thr=0.001)["labels"].tolist() == [0]
+    multi = postprocess(s, boxes, (640, 640), score_thr=0.001, multi_label=True)
+    assert sorted(multi["labels"].tolist()) == [0, 1]
 
 
 def test_containment_keeps_two_separate_objects():
@@ -122,5 +131,5 @@ def test_cli_runs_end_to_end(tmp_path):
                         "--device", "cpu"], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     text = (tmp_path / "d" / "diagnosis.txt").read_text(encoding="utf-8")
-    assert "uncovered" in text and "class-agnostic NMS 0.6" in text
+    assert "uncovered" in text and "STAL 8px" in text and "RemDet/Ultralytics" in text
     assert (tmp_path / "d" / "postprocess_sweep.csv").exists()

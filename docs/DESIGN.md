@@ -222,41 +222,45 @@ code change rather than a data-regeneration job (`DroneVehicleDataset.obb()`).
 
 ---
 
-### P0-5b "Too many boxes": two causes, only one of them needs retraining
+### P0-5b "Too many boxes": what the literature does, what we adopted
 `assigners/task_aligned_assigner.py`, `models/detector.py::postprocess`,
-`tools/diagnose_predictions.py`.
+`configs/_base_/schedule.yaml` (`assigner`, `test`), `tools/diagnose_predictions.py`.
 
-The first run's `val_predictions/` looked cluttered. Grey boxes there are GT,
-coloured ones are predictions at score >= 0.25. Zoomed in, the clutter is two
-distinct things:
+The first run's `val_predictions/` looked cluttered (grey = GT, colour =
+predictions at score >= 0.25). Zoomed in, two distinct things:
 
-**1. Duplicates -- a post-processing matter.** (a) The same person carries two or
-three nested boxes of the same class sharing a top edge: for nested boxes
-IoU = small area / large area, which for a tall thin pedestrian easily stays below
-the 0.6 NMS threshold. (b) One person is boxed as both `pedestrian` and `people`;
-NMS is class-wise, so both survive. Neither is a training defect -- GFL/TOOD
-heads with class-wise NMS behave this way -- and neither needs retraining.
-`predict()` now takes `agnostic` and `containment` (drop a box >= x covered by a
-higher-scoring one); the `test:` block of the config selects them for every
-evaluation path. The defaults stay the standard protocol until
-`tools/diagnose_predictions.py` has measured the variants on a real checkpoint:
-it classifies every drawn box (correct / same-class duplicate / wrong class /
-poorly localised / background) and reports mAP and AP_S per variant.
+* **Nested same-class boxes** on one tall object -- IoU = small / large area slips
+  under the NMS threshold -- and **pedestrian + people** on one person, which
+  class-wise NMS keeps by design.
+* Underneath, a training defect: **the smallest objects were never positives.**
+  A GT is a candidate only at grid centres inside it. At 640 input the median
+  VisDrone box is ~7.6 px; one narrower than the P2 stride can contain no centre.
+  From public size statistics ~9.5% of all GT (43% of those under 4 px) never got
+  a positive and were trained as background.
 
-**2. The smallest objects were never trained -- needs retraining.** A GT is a
-positive only at grid centres strictly inside it. At 640 input the median
-VisDrone box is ~7.6 px on a side; a box narrower than the P2 stride (4 px) can
-sit between centres and contain none. Estimated from the public size statistics,
-~9.5% of all GT boxes -- 43% of those under 4 px -- got no positive at all: never
-learned, and actively trained as background. For a small-object paper that is
-the wrong place to lose samples. `assigner.tiny_fallback` gives each such GT its
-nearest P2 centre (target floored at 0.1, so a box that does not yet overlap
-still trains); every other GT's assignment is bit-identical. Run
-`tools/diagnose_predictions.py` without `--weights` to get the exact share on
-your copy of the data.
+**How published detectors handle it, and what we took.**
+
+| problem | literature | adopted |
+|---|---|---|
+| tiny GT gets no candidate | NWD (ISPRS'22): assignment is where NWD helps most -- IoU matching leaves 0.72 positives per tiny GT vs 1.05 with NWD. RFLA (ECCV'22): Gaussian receptive-field distance. **STAL** (Ultralytics YOLO26): widen tiny GTs for candidate selection only, regress the original box | **STAL**, `stal_size: 8` (Ultralytics' `stride[1]` for a P2-P5 head). Designed for exactly our assigner (TAL, ltrb/DFL head); GTs >= 8 px are assigned bit-identically. Replaces an ad-hoc nearest-point fallback tried first |
+| evaluation post-processing | RemDet (AAAI'25, mmyolo) and Ultralytics val: score 0.001, **multi-label**, class-wise NMS **0.7**, 300 boxes; LEAF-YOLO: 0.01 / 0.5 | **same as RemDet / Ultralytics** (`test:` block). Our earlier 0.02 / single-label / 0.6 was stricter than every method in Table 1, understating our mAP |
+| drawn figures cluttered | every detector's predict mode filters at score 0.25-0.35; evaluation boxes are not meant to be drawn | figures filter at 0.25; `tools/diagnose_predictions.py` counts what the drawn boxes are |
+| duplicates at all | YOLOv10 (NeurIPS'24) / YOLO26: one-to-one head, NMS-free | **not adopted** -- see below |
+| tiny-box regression | NWD / SAL-NWD loss (DroneScan-YOLO) | **not adopted** -- GIoU keeps a gradient for disjoint boxes; NWD's own ablation puts the gain in assignment, which STAL covers |
+
+*Why not NMS-free.* A one-to-one head keeps a single prediction per object,
+which is the literal fix for duplicates and would also remove NMS from the edge
+graph (P1-8). But it adds a second head, changes the training objective, and
+one-to-one matching is least proven exactly where VisDrone is hardest -- dense
+crowds of tiny objects. Worth a dedicated experiment once the main results
+exist, not a change to the main model mid-plan.
+
+*Containment and class-agnostic NMS* stay available (`test.containment`,
+`test.agnostic`) but off: they are not in the protocol of the methods we compare
+with, and whether they help our mAP is measured by the diagnosis tool, not assumed.
 
 Every run from before this fix, including the first 200-epoch run, is obsolete
-as a table row; the batch in `run_experiments.py` retrains all of them.
+as a table row; `run_experiments.py` retrains all of them.
 
 ---
 
@@ -406,7 +410,7 @@ plus one design check. They are the only files in `configs/ablation/`.
 | 2 | `ablation/no_geometric_writeback` | the geometric prior (primary contribution) | drops only the Gaussian term, keeps content attention -- isolates the claim exactly |
 | 3 | `ablation/no_ema_routing` | illumination-consistent routing | direct evidence for the asymmetric-view EMA constraint |
 | 4 | `ablation/token_budget_256` | 56 tokens are enough | the largest known risk (P0-3). If 256 is clearly better, the MAIN model changes |
-| 5 | `ablation/no_routing_supervision` | routing supervision | without it the score maps collapse to flat (P0-4, defect 3). Must be trained: the first 200-epoch run (`3abbba5`) predates the assigner fix (P0-5b), so it differs from main by more than one variable |
+| 5 | `ablation/no_routing_supervision` | routing supervision | without it the score maps collapse to flat (P0-4, defect 3). Must be trained: the first 200-epoch run (`3abbba5`) predates STAL (P0-5b), so it differs from main by more than one variable |
 
 ### Other runs
 

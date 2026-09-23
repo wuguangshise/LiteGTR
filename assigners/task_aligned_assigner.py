@@ -14,16 +14,14 @@ from losses.giou import bbox_iou
 
 class TaskAlignedAssigner(nn.Module):
     def __init__(self, topk: int = 13, alpha: float = 1.0, beta: float = 6.0, eps: float = 1e-9,
-                 enforce_reg_range: bool = True, tiny_fallback: bool = False,
-                 fallback_min_target: float = 0.1):
+                 enforce_reg_range: bool = True, stal_size: float = 0.0):
         super().__init__()
         self.topk = topk
         self.alpha = alpha
         self.beta = beta
         self.eps = eps
         self.enforce_reg_range = enforce_reg_range
-        self.tiny_fallback = tiny_fallback
-        self.fallback_min_target = fallback_min_target
+        self.stal_size = stal_size
 
     @torch.no_grad()
     def forward(self, pred_scores: torch.Tensor, pred_boxes: torch.Tensor,
@@ -55,36 +53,28 @@ class TaskAlignedAssigner(nn.Module):
         # candidates must lie inside the GT box
         lt = points[:, None, :] - gt_boxes[None, :, :2]
         rb = gt_boxes[None, :, 2:] - points[:, None, :]
-        ltrb = torch.cat([lt, rb], -1)                               # (L, G, 4)
-        inside = ltrb.min(-1).values > 0                             # (L, G)
+        ltrb = torch.cat([lt, rb], -1)                               # (L, G, 4) -- regression geometry
+        if self.stal_size > 0:
+            # Small-Target-Aware Label Assignment (STAL, Ultralytics YOLO26): for
+            # candidate SELECTION only, a GT side shorter than ``stal_size`` is widened
+            # to it about the centre. A box narrower than the finest stride can sit
+            # between grid centres and contain none, so it never becomes a positive and
+            # is trained as background -- ~10% of VisDrone boxes at 640 input. The
+            # regression target stays the original box (``ltrb`` above).
+            ctr = (gt_boxes[:, :2] + gt_boxes[:, 2:]) * 0.5
+            half = ((gt_boxes[:, 2:] - gt_boxes[:, :2]).clamp_min(self.stal_size)) * 0.5
+            sel = torch.cat([points[:, None, :] - (ctr - half)[None], (ctr + half)[None] - points[:, None, :]], -1)
+            inside = sel.min(-1).values > 0                          # (L, G)
+        else:
+            inside = ltrb.min(-1).values > 0                         # (L, G)
 
         if self.enforce_reg_range and point_strides is not None and reg_max is not None:
             in_range = (ltrb / point_strides[:, None, None]).max(-1).values <= reg_max
             inside = inside & in_range
 
-        fallback = None
-        if self.tiny_fallback:
-            # A GT narrower than the finest stride can fall between grid centres and
-            # contain no point at all. It then gets no positive, is never learned, and
-            # is trained as background -- ~10% of VisDrone boxes at 640 input, ~40% of
-            # those under 4 px. Give each such GT its nearest finest-level point.
-            orphan = ~inside.any(0)                                    # (G,)
-            ctr = (gt_boxes[:, :2] + gt_boxes[:, 2:]) * 0.5
-            d2 = (points[:, None, :] - ctr[None, :, :]).pow(2).sum(-1)  # (L, G)
-            if point_strides is not None:
-                d2 = d2 + (point_strides > point_strides.min()).to(d2.dtype)[:, None] * 1e12
-            nearest = d2.argmin(0)                                     # (G,)
-            fallback = torch.zeros_like(inside)
-            fallback[nearest, torch.arange(num_gt, device=device)] = orphan
-            inside = inside | fallback
-
         ious = bbox_iou(pred_boxes, gt_boxes)                        # (L, G)
         scores = pred_scores[:, gt_labels]                           # (L, G)
         align = scores.clamp_min(self.eps).pow(self.alpha) * ious.clamp_min(0).pow(self.beta)
-        if fallback is not None:
-            # the predicted box of an outside point may not overlap a 3-px GT at all;
-            # keep the pair selectable instead of letting IoU = 0 drop it again
-            align = torch.where(fallback, align.clamp_min(self.eps), align)
         align = align * inside
 
         topk = min(self.topk, num_pts)
@@ -117,14 +107,6 @@ class TaskAlignedAssigner(nn.Module):
         max_iou = (ious * mask).max(0, keepdim=True).values
         norm_align = align_pos / (max_align + self.eps) * max_iou
         assigned_ious = norm_align.max(1).values
-        if fallback is not None:
-            # The soft target doubles as the regression weight. For a fallback point
-            # whose box does not yet overlap its GT, IoU = 0 would make both zero and
-            # the GT would still learn nothing; a small floor keeps it trainable, and
-            # the target grows with the real IoU once the box starts to fit.
-            fb_pos = (mask & fallback).any(1)
-            assigned_ious = torch.where(fb_pos, assigned_ious.clamp_min(self.fallback_min_target),
-                                        assigned_ious)
 
         return {
             "fg_mask": fg,

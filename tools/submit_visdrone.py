@@ -65,7 +65,8 @@ def main() -> None:
         pp = postprocess_cfg(cfg)
         preds = model.predict(images.to(device), score_thr=a.score_thr, max_det=a.max_det,
                               nms_iou=pp["nms_iou"], agnostic=pp["agnostic"],
-                              containment=pp["containment"])
+                              containment=pp["containment"], multi_label=pp["multi_label"],
+                              pre_nms=pp["pre_nms"])
         for t, p in zip(targets, preds):
             meta = t["meta"]
             ori_hw = tuple(meta["ori_shape"])
