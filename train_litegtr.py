@@ -6,7 +6,8 @@ LiteGTR 训练脚本 —— VisDrone（官方原始标注），改常量即可�
 仓库里有两个训练入口，训练逻辑完全相同（都调用 engine/trainer.py）：
 
     train_litegtr.py   参数写在顶部常量区，改完直接运行。适合日常实验
-    tools/train.py     参数全部来自 YAML，命令行传入。适合批量跑、写脚本调度
+    run_experiments.py 按顺序批量跑完整模型 + 全部消融 + 基线，逐个调用本脚本
+    tools/train.py     参数全部来自 YAML，命令行传入
 
 训练开始前会做完整预检，路径或标注格式不对会立刻报错并说明原因，不会跑到一半才崩。
 
@@ -337,12 +338,39 @@ def main():
     print("=" * 64)
 
 
+def apply_cli_overrides(argv=None) -> None:
+    """命令行覆盖常量区的四个值；不带参数运行时什么都不变。
+
+    批量脚本 run_experiments.py 靠它逐个启动实验，其余训练常量一律取本文件的值，
+    所以批量跑出来的每个实验配方完全一致。
+    """
+    import argparse
+
+    ap = argparse.ArgumentParser(description="不带参数 = 使用顶部常量区的配置")
+    ap.add_argument("--model-config", help="覆盖 MODEL_CONFIG")
+    ap.add_argument("--name", help="覆盖 NAME（输出目录名）")
+    ap.add_argument("--resume", help="覆盖 RESUME（续训的 last.pt）")
+    ap.add_argument("--seed", type=int, help="覆盖 SEED")
+    a = ap.parse_args(argv)
+    global MODEL_CONFIG, NAME, RESUME, SEED
+    if a.model_config:
+        MODEL_CONFIG = a.model_config
+    if a.name:
+        NAME = a.name
+    if a.resume:
+        RESUME = a.resume
+    if a.seed is not None:
+        SEED = a.seed
+
+
 if __name__ == "__main__":
+    apply_cli_overrides()
     # Windows 下 DataLoader 多进程必须有这层保护
     try:
         main()
     except KeyboardInterrupt:
         print("\n训练被用户中断")
+        sys.exit(130)             # 非 0：批量脚本据此停下，而不是当成跑完
     except Exception as e:
         print(f"\n出错: {type(e).__name__}: {e}")
         raise

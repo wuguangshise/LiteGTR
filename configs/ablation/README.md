@@ -50,6 +50,16 @@
 
 ## 怎么跑
 
+**一次跑完（推荐）**：仓库根目录的 `run_experiments.py` 按顺序跑完整模型、全部消融和基线，
+可随时 Ctrl+C 中断，再运行会跳过已完成的、续训跑了一半的，结果汇总到
+`runs/train/experiments_summary.csv`：
+
+```bash
+python run_experiments.py --dry-run   # 先看一眼要跑哪些
+python run_experiments.py
+```
+
+**单独跑一个**：
 独立脚本，同时改这两行，其余不动：
 
 ```python

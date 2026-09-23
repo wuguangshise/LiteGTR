@@ -27,12 +27,13 @@ pip install -r requirements.txt   # install torch separately to match your CUDA
 
 ## Training entry points
 
-Two entry points, identical training logic (both drive `engine/trainer.py`):
+Three entry points, identical training logic (all drive `engine/trainer.py`):
 
 | | how it is configured | use it for |
 |---|---|---|
 | **`train_litegtr.py`** | constants at the top of the file; edit and run | day-to-day experiments |
-| `tools/train.py` | everything from YAML, passed on the command line | batch runs, scheduling scripts |
+| `run_experiments.py` | list of experiments at the top; calls `train_litegtr.py` once per entry | the whole paper batch: main model, ablations, baselines -- resumable, skips finished runs |
+| `tools/train.py` | everything from YAML, passed on the command line | DroneVehicle and other scripted runs |
 
 ```bash
 python train_litegtr.py        # set DATA_ROOT and MODEL_CONFIG at the top first
