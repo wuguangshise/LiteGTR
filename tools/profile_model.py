@@ -1,5 +1,10 @@
 """STEP 1 of the build order: make the budget real before writing experiments.
 
+Named profile_model.py, not profile.py: a script called profile.py shadows the
+standard-library ``profile`` module. Running it puts tools/ on sys.path, and
+torchvision -> torch._dynamo -> cProfile then imports THIS file instead, failing
+with "module 'profile' has no attribute 'run'".
+
 The original plan targeted 3-5M params and ~5G MACs @640.  The analytic sweep
 (``--search``, no torch needed) showed the proposed backbone alone was 3.76M /
 4.95G -- i.e. the entire MAC budget was consumed before the neck, tokens and
@@ -7,9 +12,9 @@ head existed.  Run this whenever a structural knob changes.
 
 Usage
 -----
-    python tools/profile.py --search                       # analytic backbone sweep
-    python tools/profile.py --config configs/models/model_main.yaml
-    python tools/profile.py --config ... --imgsz 640 --out runs/profile
+    python tools/profile_model.py --search                       # analytic backbone sweep
+    python tools/profile_model.py --config configs/models/model_main.yaml
+    python tools/profile_model.py --config ... --imgsz 640 --out runs/profile
 """
 from __future__ import annotations
 

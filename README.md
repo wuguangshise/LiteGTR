@@ -48,8 +48,8 @@ constants unchanged -- the model config must match, or resuming fails loudly.
 **1. Check the budget before anything else.**
 
 ```bash
-python tools/profile.py --search                              # analytic sweep, no torch needed
-python tools/profile.py --config configs/models/model_main.yaml --out runs/profile
+python tools/profile_model.py --search                              # analytic sweep, no torch needed
+python tools/profile_model.py --config configs/models/model_main.yaml --out runs/profile
 ```
 
 **2. Measure your data before trusting the token budget.**

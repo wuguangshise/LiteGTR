@@ -18,7 +18,7 @@ conditions**.
 
 ## 1. Measured findings that changed the plan
 
-Run `python tools/profile.py --search` to reproduce.
+Run `python tools/profile_model.py --search` to reproduce.
 
 | backbone | params | MACs @640 | per-stage params (M) |
 |---|---|---|---|
@@ -39,7 +39,7 @@ Two things the original plan could not have known without running this:
 
 **Conclusion: the "≈5G MACs @640" target is not attainable with a genuine P2
 branch.** Either state a realistic figure (≈8–10G MACs / 16–20 GFLOPs, still
-YOLOv8n-class) or drop P2. The code keeps P2 and makes it cheap; `tools/profile.py`
+YOLOv8n-class) or drop P2. The code keeps P2 and makes it cheap; `tools/profile_model.py`
 prints the real number so the paper never quotes an aspirational one.
 
 ---
@@ -285,7 +285,7 @@ DataLoader workers.
 
 ## 5. Build order
 
-1. `tools/profile.py` — **done**, numbers above.
+1. `tools/profile_model.py` — **done**, numbers above.
 2. Lock token/projection dims against the measured budget, and run
    `tools/analyze_dataset.py` so the budget sweep starts from your data's real
    objects-per-image distribution rather than a quoted average.

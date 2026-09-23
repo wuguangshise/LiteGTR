@@ -23,6 +23,6 @@ jobs:
         run: pytest tests/ -q
       - name: Report the real parameter/MAC budget
         run: |
-          python tools/profile.py --search
-          python tools/profile.py --config configs/models/model_main.yaml
-          python tools/profile.py --config configs/models/model_edge_s.yaml
+          python tools/profile_model.py --search
+          python tools/profile_model.py --config configs/models/model_main.yaml
+          python tools/profile_model.py --config configs/models/model_edge_s.yaml

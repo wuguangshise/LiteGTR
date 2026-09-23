@@ -1,8 +1,8 @@
 """Analytic parameter/MAC budget calculator -- pure Python, no torch required.
 
-Used by ``tools/profile.py --search`` to sweep backbone configurations without
+Used by ``tools/profile_model.py --search`` to sweep backbone configurations without
 instantiating models.  Real (authoritative) numbers come from the torch path in
-``tools/profile.py``; this module exists so that config search is instant and
+``tools/profile_model.py``; this module exists so that config search is instant and
 runnable in environments without torch.
 
 See docs/DESIGN.md section "P0-1 / P0-2 parameter budget".
