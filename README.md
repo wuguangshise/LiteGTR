@@ -128,7 +128,7 @@ losses/     qfl · giou · dfl · token_consistency · token_routing
 assigners/  task_aligned_assigner
 engine/     trainer · evaluator (loop) · ema · checkpoint · recorder
 tools/      profile · analyze_dataset · visualize_labels · train · val · test
-            run_seeds · export_onnx · benchmark_latency · submit_visdrone · inspect_tokens
+            run_seeds · export_onnx · benchmark_latency · submit_visdrone · inspect_tokens · visualize_tokens
 train_litegtr.py   edit-and-run training entry (constants at the top)
 utils/      budget (analytic) · boxes (letterbox inverse, IoU) · plots
 tests/      param-budget guard · static-ONNX guard · shape/backward · baselines · boxes · config
