@@ -32,11 +32,13 @@ def build_optimizer(model, cfg: dict):
     t = cfg.get("optimizer", "adamw").lower()
     lr = cfg.get("lr", 1e-3)
     wd = cfg.get("weight_decay", 0.05)
+    skip = model.no_weight_decay() if hasattr(model, "no_weight_decay") else set()
     decay, no_decay = [], []
     for n, p in model.named_parameters():
         if not p.requires_grad:
             continue
-        (no_decay if p.ndim <= 1 or n.endswith(".gamma") or "level_embed" in n else decay).append(p)
+        exempt = p.ndim <= 1 or n.endswith(".gamma") or "level_embed" in n or n in skip
+        (no_decay if exempt else decay).append(p)
     groups = [{"params": decay, "weight_decay": wd}, {"params": no_decay, "weight_decay": 0.0}]
     if t == "adamw":
         return torch.optim.AdamW(groups, lr=lr, betas=cfg.get("betas", (0.9, 0.999)))

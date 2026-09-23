@@ -29,6 +29,16 @@ model:
     mixer_layers: 1
     writeback_mode: geometric      # geometric | content | broadcast
     score_gate: true               # gradient path into the scorer; false = random routing
+    # The gate alone does not teach the scorer WHERE to look: the first run's score
+    # maps flattened (score_entropy -> 0.999997), i.e. random routing. Supervise them
+    # with GT-centre heatmaps (losses/token_routing.py) and keep weight decay off the
+    # scorer's output conv. Both off = ablation/no_routing_supervision.yaml.
+    routing_sup:
+      enabled: true
+      weight: 0.5                  # same scale as the EMA consistency term
+      sigma_ratio: 0.1667          # Gaussian sigma = 1/6 of the box extent...
+      sigma_min: 0.5               # ...floored at half a cell
+    scorer_no_decay: true
     ema:
       enabled: true
       momentum: 0.999

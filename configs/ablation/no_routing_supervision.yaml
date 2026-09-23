@@ -1,0 +1,6 @@
+# Scorer trained by the score gate and EMA consistency only -- no GT supervision,
+# weight decay on its output conv as before. Bit-for-bit the configuration of the
+# first 200-epoch run (commit 3abbba5), whose score maps collapsed to flat, so that
+# run IS this ablation. Main vs this isolates the routing supervision.
+_base_: [../models/model_main.yaml]
+model: {token: {routing_sup: {enabled: false}, scorer_no_decay: false}}

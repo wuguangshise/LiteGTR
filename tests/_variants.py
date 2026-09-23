@@ -25,8 +25,11 @@ VARIANTS: dict[str, dict] = {
     "token_src_p5": {"model": {"token": {"levels": ["P5"], "budget": {"P5": 56},
                                          "writeback_levels": ["P3", "P4", "P5"]}}},
     # routing: the scorer's gradient sources
-    "random_routing": {"model": {"token": {"score_gate": False, "ema": {"enabled": False}}}},
-    "no_ema": {"model": {"token": {"ema": {"enabled": False}}}},
+    "random_routing": {"model": {"token": {"score_gate": False, "ema": {"enabled": False},
+                                           "routing_sup": {"enabled": False}}}},
+    "no_ema": {"model": {"token": {"ema": {"enabled": False}, "routing_sup": {"enabled": False}}}},
+    "no_routing_sup": {"model": {"token": {"routing_sup": {"enabled": False}, "scorer_no_decay": False}}},
+    "routing_sup_only": {"model": {"token": {"score_gate": False, "ema": {"enabled": False}}}},
     "ema_same_view": {"model": {"token": {"ema": {"view": "same"}}}},
 }
 

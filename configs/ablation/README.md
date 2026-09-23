@@ -1,6 +1,6 @@
 # 消融实验
 
-只保留论文真正需要的 4 个：三个主张各配一个消融来证明，再加一个设计验证。
+只保留论文真正需要的 5 个：四个主张各配一个消融来证明，再加一个设计验证。
 每个都继承 `configs/models/model_main.yaml`，**相对主模型只改一个变量**。
 
 | # | 配置 | 改了什么 | 证明什么 |
@@ -9,6 +9,7 @@
 | 2 | `no_geometric_writeback.yaml` | 写回去掉高斯几何先验，只留内容注意力 | **几何先验（主创新）有效** |
 | 3 | `no_ema_routing.yaml` | 关掉 EMA 光照一致性约束 | **光照一致路由有效** |
 | 4 | `token_budget_256.yaml` | token 从 56 增加到 256 | **56 个是否足够** —— 最大的已知风险 |
+| 5 | `no_routing_supervision.yaml` | 去掉打分器的 GT 前景监督，打分器输出层恢复 weight decay | **路由监督有效** —— 没有它分数图会塌缩成平的，等于随机路由 |
 
 ## 论文里怎么呈现
 
@@ -19,6 +20,7 @@
   − 几何先验   (#2)       xx.x      −b      主创新的贡献
   − 光照一致   (#3)       xx.x      −c      路由约束的贡献
   token 256    (#4)       xx.x      ±d      预算是否足够
+  − 路由监督   (#5)       xx.x      −e      学习式选择的贡献
 ```
 
 `#1` 还兼作"TinyNeXt 无 token"基线，和 `configs/baselines/csp_n.yaml` 一起放进主表，
@@ -32,6 +34,9 @@
 2. **`token_budget_256`**：若明显优于 56，**主模型本身要改**，越早知道越好
 3. **`no_geometric_writeback`**
 4. **`no_ema_routing`**
+5. **`no_routing_supervision`**：**不用重跑**。第一次 200 轮的主模型训练（提交 `3abbba5`）
+   和这个配置逐位一致，直接用它的 best.pt 和日志即可。它的 `token_stats.csv` 里
+   `score_entropy` 一路逼近 1.0，可以画成图和主模型对比，说明为什么需要监督
 
 ## 额外价值：同样的配置，换 DroneVehicle 再跑
 

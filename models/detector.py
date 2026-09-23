@@ -25,6 +25,7 @@ from losses.dfl import DistributionFocalLoss
 from losses.giou import GIoULoss, bbox_iou_aligned
 from losses.qfl import QualityFocalLoss
 from losses.token_consistency import TokenConsistencyLoss
+from losses.token_routing import TokenRoutingLoss
 from models.backbone.builder import build_backbone
 from models.head.gfl_head import GFLHead
 from models.neck.pyramid_projection import LocalCNNPath, PyramidProjection
@@ -79,8 +80,18 @@ class LiteGTR(nn.Module):
                                      contrast=pv.get("contrast", 0.4),
                                      gamma=tuple(pv.get("gamma", (0.7, 1.5))),
                                      noise=pv.get("noise", 0.03))
+            # GT-centre supervision of the score maps -- see losses/token_routing.py.
+            # Absent from a config means off, which reproduces runs made before it existed.
+            rs = tk.get("routing_sup", {})
+            self.routing_loss = (TokenRoutingLoss(loss_weight=rs.get("weight", 0.5),
+                                                  sigma_ratio=rs.get("sigma_ratio", 1 / 6),
+                                                  sigma_min=rs.get("sigma_min", 0.5))
+                                 if rs.get("enabled", False) else None)
+            self.scorer_no_decay = tk.get("scorer_no_decay", False)
         else:
             self.selector = self.mixer = self.writeback = self.ema_router = None
+            self.routing_loss = None
+            self.scorer_no_decay = False
 
         hd = mc["head"]
         self.head = GFLHead(self.num_classes, dim, strides=self.strides,
@@ -163,12 +174,14 @@ class LiteGTR(nn.Module):
         device = cls.device
 
         cls_targets = torch.zeros_like(cls)
+        gts: list[torch.Tensor] = []
         pos_boxes, pos_tgt_boxes, pos_reg, pos_points, pos_strides, pos_w = [], [], [], [], [], []
         num_pos = 0
         for i in range(b):
             # targets are pinned by the DataLoader, so this copy can overlap compute
             gt_boxes = targets[i]["boxes"].to(device, non_blocking=True)
             gt_labels = targets[i]["labels"].to(device, non_blocking=True)
+            gts.append(gt_boxes)
             res = self.assigner(cls[i].detach().sigmoid(), boxes[i].detach(), points,
                                 gt_boxes, gt_labels,
                                 point_strides=strides, reg_max=self.head.reg_max)
@@ -217,6 +230,9 @@ class LiteGTR(nn.Module):
 
         if self._last_teacher_maps is not None:
             losses["loss_token"] = self.token_consistency(self._last_student_maps, self._last_teacher_maps)
+        if self.routing_loss is not None and self._last_student_maps is not None:
+            stride_of = dict(zip(self.levels, self.strides))
+            losses["loss_route"] = self.routing_loss(self._last_student_maps, gts, stride_of)
         return losses
 
     # --------------------------------------------------------------- predict
@@ -246,6 +262,18 @@ class LiteGTR(nn.Module):
     def ema_step(self) -> None:
         if self.ema_router is not None:
             self.ema_router.update(self.selector)
+
+    def no_weight_decay(self) -> set[str]:
+        """Parameter names the optimizer must not decay (``build_optimizer`` reads this).
+
+        With ``scorer_no_decay`` the scorers' final 1x1 conv is exempt: its output
+        IS the routing score, and decaying it drags every score toward the same
+        value -- the flat-map collapse ``losses/token_routing.py`` describes.
+        """
+        if not self.scorer_no_decay or self.selector is None:
+            return set()
+        last = {id(sel.scorer.conv[-1].weight) for sel in self.selector.selectors.values()}
+        return {n for n, p in self.named_parameters() if id(p) in last}
 
     def deploy_state_dict(self) -> dict:
         """State dict with the EMA teacher stripped -- what ONNX export uses."""

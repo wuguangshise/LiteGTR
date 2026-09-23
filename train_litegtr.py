@@ -56,11 +56,12 @@ MODEL_CONFIG = r"configs/models/model_main.yaml"
 #   对比基线（同 neck/head/loss/调度，只换 backbone）：
 #     configs/baselines/csp_n.yaml          YOLOv8n 量级 CSP
 #     configs/baselines/csp_t.yaml          更小的 CSP，对应 Edge-S
-#   消融实验（configs/ablation/，共 4 个，按建议顺序）：
+#   消融实验（configs/ablation/，共 5 个，按建议顺序）：
 #     configs/ablation/no_global_token.yaml         ① token 路径整体有效（最先跑）
 #     configs/ablation/token_budget_256.yaml        ② 56 个 token 是否足够
 #     configs/ablation/no_geometric_writeback.yaml  ③ 几何先验（主创新）
 #     configs/ablation/no_ema_routing.yaml          ④ 光照一致路由
+#     configs/ablation/no_routing_supervision.yaml  ⑤ 路由监督（提交 3abbba5 的那次训练就是它，不用重跑）
 #     说明见 configs/ablation/README.md
 #   换实验时记得同时改下面的 NAME，否则会覆盖上一次的输出
 
@@ -291,7 +292,10 @@ def main():
         ema = tk.get("ema", {})
         gate = tk.get("score_gate")
         view = ema.get("view", "-") if ema.get("enabled") else "关闭"
-        print(f"路由      : 打分门控={gate}  EMA视图={view}")
+        rs = tk.get("routing_sup", {})
+        sup = f"开（权重 {rs.get('weight', 0.5)}）" if rs.get("enabled") else "关"
+        print(f"路由      : 打分门控={gate}  EMA视图={view}  GT监督={sup}"
+              f"  打分器免衰减={tk.get('scorer_no_decay', False)}")
         if gate is None:
             print("  !! 配置里没有 score_gate —— 仓库代码是旧的，请先 git pull")
     print(f"数据集    : {DATA_ROOT}")

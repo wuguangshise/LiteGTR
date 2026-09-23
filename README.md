@@ -97,7 +97,7 @@ python tools/train.py --config configs/datasets/visdrone_rgb.yaml \
 
 Compare against the main model (56 tokens). If 256 is clearly better, the main
 model should use more tokens — find that out before the rest of the ablations.
-The four ablations the paper needs are indexed in `configs/ablation/README.md`.
+The five ablations the paper needs are indexed in `configs/ablation/README.md`.
 
 **5. Train, compare against baselines, evaluate, export.**
 
@@ -124,7 +124,7 @@ python tools/submit_visdrone.py --config configs/datasets/visdrone_rgb.yaml \
 configs/    _base_ / datasets / models / ablation / baselines   — every variant is a YAML key
 datasets/   base · builder · visdrone · dronevehicle · transforms · metrics · prepare/
 models/     backbone (tinynext + builder) · baselines/ · neck · token · head · detector · build
-losses/     qfl · giou · dfl · token_consistency
+losses/     qfl · giou · dfl · token_consistency · token_routing
 assigners/  task_aligned_assigner
 engine/     trainer · evaluator (loop) · ema · checkpoint · recorder
 tools/      profile · analyze_dataset · visualize_labels · train · val · test

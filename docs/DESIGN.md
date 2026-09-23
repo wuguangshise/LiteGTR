@@ -152,12 +152,41 @@ into the statistics used at validation.
 (spatial-softmax KL); `top-k` never enters the graph, train and inference run the
 identical selection, and the teacher is stripped from `deploy_state_dict()`.
 
-| setting | score_gate | EMA view | what it isolates |
-|---|---|---|---|
-| random routing *(test variant)* | off | off | is learned selection better than random? |
-| `ablation/no_ema_routing` | on | off | learned routing, no consistency |
-| `models/model_main` | on | photometric | + illumination-invariant routing |
-| same-view EMA *(test variant)* | on | same | shows why the asymmetric view is needed |
+**3. The gate did not teach the scorer where to look, and the maps went flat.**
+Measured on the first 200-epoch VisDrone run (commit `3abbba5`): `score_entropy`
+rose monotonically from 0.99998 to 0.999997 over 135 epochs -- a score std of
+about 0.01 across the map -- while `ema_agreement` read 0.999 and `loss_token`
+sat at ~4e-6. The agreement was trivial: both maps were flat. Three causes stack:
+
+* the `sigmoid(score)` gate is a per-token scale the mixer and write-back can
+  absorb, so the detection loss carries almost no information about *which
+  position* deserves a token;
+* the spatial-softmax KL is zero for any two identical maps, flat ones included,
+  so the consistency term actively admits the collapse;
+* the scorer's output conv sat in the weight-decay group, which pulls every
+  score toward the same value.
+
+A 150-step synthetic check confirms the consequence: without supervision 1.7% of
+the selected P3 tokens fall on objects against an object-area share (chance) of
+1.5% -- random routing.
+
+*Fix — routing supervision.* Each level's score map is supervised with a
+Gaussian GT-centre heatmap under CenterNet's penalty-reduced focal loss
+(`losses/token_routing.py`, `routing_sup`). Every level sees every object, so
+selection follows object density -- on VisDrone, small objects. The scorer's
+output conv is exempt from weight decay (`scorer_no_decay`). On the same
+synthetic check, 25.5% of selected tokens land on objects after 150 steps, the
+map entropy falls, and the EMA term becomes live (1e-4 -> 2e-2): with peaked
+maps, "consistent under a lighting change" is no longer trivially satisfied.
+Training-only; the exported graph is unchanged.
+
+| setting | score_gate | EMA view | routing_sup | what it isolates |
+|---|---|---|---|---|
+| random routing *(test variant)* | off | off | off | is learned selection better than random? |
+| `ablation/no_routing_supervision` | on | photometric | off | the first run exactly: gate + EMA alone collapse |
+| `ablation/no_ema_routing` | on | off | on | supervised routing, no consistency |
+| `models/model_main` | on | photometric | on | + illumination-invariant routing |
+| same-view EMA *(test variant)* | on | same | on | shows why the asymmetric view is needed |
 
 ### P0-5 DroneVehicle: read the XML, rewrite nothing
 
@@ -328,7 +357,7 @@ DataLoader workers.
 
 ## 6. Experiment matrix
 
-### The four ablations the paper needs
+### The five ablations the paper needs
 
 Each changes exactly one variable relative to `models/model_main.yaml`; one per claim,
 plus one design check. They are the only files in `configs/ablation/`.
@@ -339,6 +368,7 @@ plus one design check. They are the only files in `configs/ablation/`.
 | 2 | `ablation/no_geometric_writeback` | the geometric prior (primary contribution) | drops only the Gaussian term, keeps content attention -- isolates the claim exactly |
 | 3 | `ablation/no_ema_routing` | illumination-consistent routing | direct evidence for the asymmetric-view EMA constraint |
 | 4 | `ablation/token_budget_256` | 56 tokens are enough | the largest known risk (P0-3). If 256 is clearly better, the MAIN model changes |
+| 5 | `ablation/no_routing_supervision` | routing supervision | without it the score maps collapse to flat (P0-4, defect 3). **Already trained**: the first 200-epoch run at commit `3abbba5` is this configuration exactly |
 
 ### Other runs
 
