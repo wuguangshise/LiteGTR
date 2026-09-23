@@ -16,8 +16,21 @@ from utils.plots import ConfusionMatrix, draw_predictions, plot_pr_curves
 
 
 @torch.no_grad()
+def postprocess_cfg(cfg: dict) -> dict:
+    """``test:`` block of a config -> keyword arguments for ``LiteGTR.predict``.
+
+    One place, so training-time validation, tools/val.py, tools/test.py and the
+    submission script always post-process identically.
+    """
+    t = cfg.get("test", {}) or {}
+    return {"score_thr": t.get("score_thr", 0.02), "nms_iou": t.get("nms_iou", 0.6),
+            "max_det": t.get("max_det", 500), "agnostic": t.get("agnostic", False),
+            "containment": t.get("containment")}
+
+
 def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
              nms_iou: float = 0.6, max_det: int = 500, amp: bool = False,
+             agnostic: bool = False, containment: float | None = None,
              per_condition: bool = True, desc: str = "val",
              save_dir: str | Path | None = None, num_vis: int = 16) -> tuple[dict, dict]:
     """Returns ``(overall_metrics, per_condition_metrics)``.
@@ -37,7 +50,8 @@ def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
     for images, targets in tqdm(loader, desc=desc, leave=False):
         images = images.to(device, non_blocking=True)
         with torch.autocast(device_type=device.type, enabled=amp and device.type == "cuda"):
-            preds = model.predict(images, score_thr=score_thr, nms_iou=nms_iou, max_det=max_det)
+            preds = model.predict(images, score_thr=score_thr, nms_iou=nms_iou, max_det=max_det,
+                                  agnostic=agnostic, containment=containment)
         h, w = images.shape[-2:]
         for bi, (t, p) in enumerate(zip(targets, preds)):
             gt_b = t["boxes"].cpu().numpy()

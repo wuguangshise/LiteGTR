@@ -222,6 +222,44 @@ code change rather than a data-regeneration job (`DroneVehicleDataset.obb()`).
 
 ---
 
+### P0-5b "Too many boxes": two causes, only one of them needs retraining
+`assigners/task_aligned_assigner.py`, `models/detector.py::postprocess`,
+`tools/diagnose_predictions.py`.
+
+The first run's `val_predictions/` looked cluttered. Grey boxes there are GT,
+coloured ones are predictions at score >= 0.25. Zoomed in, the clutter is two
+distinct things:
+
+**1. Duplicates -- a post-processing matter.** (a) The same person carries two or
+three nested boxes of the same class sharing a top edge: for nested boxes
+IoU = small area / large area, which for a tall thin pedestrian easily stays below
+the 0.6 NMS threshold. (b) One person is boxed as both `pedestrian` and `people`;
+NMS is class-wise, so both survive. Neither is a training defect -- GFL/TOOD
+heads with class-wise NMS behave this way -- and neither needs retraining.
+`predict()` now takes `agnostic` and `containment` (drop a box >= x covered by a
+higher-scoring one); the `test:` block of the config selects them for every
+evaluation path. The defaults stay the standard protocol until
+`tools/diagnose_predictions.py` has measured the variants on a real checkpoint:
+it classifies every drawn box (correct / same-class duplicate / wrong class /
+poorly localised / background) and reports mAP and AP_S per variant.
+
+**2. The smallest objects were never trained -- needs retraining.** A GT is a
+positive only at grid centres strictly inside it. At 640 input the median
+VisDrone box is ~7.6 px on a side; a box narrower than the P2 stride (4 px) can
+sit between centres and contain none. Estimated from the public size statistics,
+~9.5% of all GT boxes -- 43% of those under 4 px -- got no positive at all: never
+learned, and actively trained as background. For a small-object paper that is
+the wrong place to lose samples. `assigner.tiny_fallback` gives each such GT its
+nearest P2 centre (target floored at 0.1, so a box that does not yet overlap
+still trains); every other GT's assignment is bit-identical. Run
+`tools/diagnose_predictions.py` without `--weights` to get the exact share on
+your copy of the data.
+
+Every run from before this fix, including the first 200-epoch run, is obsolete
+as a table row; the batch in `run_experiments.py` retrains all of them.
+
+---
+
 ## 3. P1 — paper-level decisions
 
 ### P1-6 Pretraining: unified protocol, not a ban
@@ -368,7 +406,7 @@ plus one design check. They are the only files in `configs/ablation/`.
 | 2 | `ablation/no_geometric_writeback` | the geometric prior (primary contribution) | drops only the Gaussian term, keeps content attention -- isolates the claim exactly |
 | 3 | `ablation/no_ema_routing` | illumination-consistent routing | direct evidence for the asymmetric-view EMA constraint |
 | 4 | `ablation/token_budget_256` | 56 tokens are enough | the largest known risk (P0-3). If 256 is clearly better, the MAIN model changes |
-| 5 | `ablation/no_routing_supervision` | routing supervision | without it the score maps collapse to flat (P0-4, defect 3). **Already trained**: the first 200-epoch run at commit `3abbba5` is this configuration exactly |
+| 5 | `ablation/no_routing_supervision` | routing supervision | without it the score maps collapse to flat (P0-4, defect 3). Must be trained: the first 200-epoch run (`3abbba5`) predates the assigner fix (P0-5b), so it differs from main by more than one variable |
 
 ### Other runs
 

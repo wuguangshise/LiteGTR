@@ -83,3 +83,16 @@ def test_results_without_checkpoint_is_refused(tmp_path):
     (tmp_path / "x").mkdir()
     (tmp_path / "x" / "results.csv").write_text("epoch\n1\n")
     assert R.foreign_run(tmp_path / "x", "configs/models/model_main.yaml")
+
+
+def test_run_from_before_the_assigner_fix_is_refused(tmp_path):
+    """Same model config, but trained before assigner.tiny_fallback existed."""
+    from models.build import load_config
+
+    run = tmp_path / "main"
+    (run / "weights").mkdir(parents=True)
+    cfg = load_config(R.REPO / "configs/models/model_main.yaml")
+    cfg["model"]["num_classes"] = 10
+    cfg["assigner"].pop("tiny_fallback")
+    torch.save({"epoch": 50, "config": cfg}, run / "weights" / "last.pt")
+    assert "assigner" in R.foreign_run(run, "configs/models/model_main.yaml")

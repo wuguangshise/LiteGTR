@@ -34,9 +34,10 @@
 2. **`token_budget_256`**：若明显优于 56，**主模型本身要改**，越早知道越好
 3. **`no_geometric_writeback`**
 4. **`no_ema_routing`**
-5. **`no_routing_supervision`**：**不用重跑**。第一次 200 轮的主模型训练（提交 `3abbba5`）
-   和这个配置逐位一致，直接用它的 best.pt 和日志即可。它的 `token_stats.csv` 里
-   `score_entropy` 一路逼近 1.0，可以画成图和主模型对比，说明为什么需要监督
+5. **`no_routing_supervision`**：需要重跑。第一次 200 轮训练（提交 `3abbba5`）虽然路由配置相同，
+   但早于小目标分配修复（`assigner.tiny_fallback`），和现在的主模型差了不止一个变量，
+   不能当作这一行。它的 `token_stats.csv`（`score_entropy` 一路逼近 1.0）仍可作为
+   "无监督时分数图塌缩"的证据
 
 ## 额外价值：同样的配置，换 DroneVehicle 再跑
 

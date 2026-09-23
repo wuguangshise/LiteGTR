@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from datasets.base import collate_fn  # noqa: E402
 from datasets.builder import build_dataset  # noqa: E402
 from engine.checkpoint import CheckpointManager  # noqa: E402
-from engine.evaluator import evaluate  # noqa: E402
+from engine.evaluator import evaluate, postprocess_cfg  # noqa: E402
 from models.build import build_model, load_config  # noqa: E402
 
 
@@ -50,7 +50,7 @@ def main() -> None:
     model.to(device)
 
     overall, by_cond = evaluate(model, loader, device, ds.classes, desc=a.split,
-                                save_dir=a.save_dir, num_vis=a.num_vis)
+                                save_dir=a.save_dir, num_vis=a.num_vis, **postprocess_cfg(cfg))
     print("\n== overall ==")
     for k, v in overall.items():
         print(f"  {k:12s} {v:.4f}" if isinstance(v, float) else f"  {k:12s} {v}")

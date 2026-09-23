@@ -238,25 +238,23 @@ class LiteGTR(nn.Module):
     # --------------------------------------------------------------- predict
     @torch.no_grad()
     def predict(self, images: torch.Tensor, score_thr: float = 0.02, nms_iou: float = 0.6,
-                max_det: int = 500, pre_nms: int = 3000) -> list[dict]:
+                max_det: int = 500, pre_nms: int = 3000, agnostic: bool = False,
+                containment: float | None = None) -> list[dict]:
+        """Decoded, NMS-filtered detections per image.
+
+        ``agnostic`` runs one NMS over all classes: on VisDrone a person is often
+        predicted as both ``pedestrian`` and ``people``, and class-wise NMS keeps both.
+        ``containment`` additionally drops a box when a higher-scoring kept box of the
+        same class (any class if ``agnostic``) covers at least that fraction of its
+        area: nested boxes on one tall object have IoU = small/large area, which falls
+        below ``nms_iou`` and survives plain NMS. Defaults reproduce standard GFL
+        post-processing; tools/diagnose_predictions.py measures the alternatives.
+        """
         cls_scores, bbox_preds, feats = self(images)
         cls, _, boxes, _, _ = self.head.decode(cls_scores, bbox_preds, feats)
-        scores = cls.sigmoid()
-        h, w = images.shape[-2:]
-        results = []
-        for i in range(images.shape[0]):
-            s, bx = scores[i], boxes[i]
-            s_max, labels = s.max(-1)
-            keep = s_max > score_thr
-            s_max, labels, bx = s_max[keep], labels[keep], bx[keep]
-            if s_max.numel() > pre_nms:
-                topv, topi = s_max.topk(pre_nms)
-                s_max, labels, bx = topv, labels[topi], bx[topi]
-            bx[:, 0::2] = bx[:, 0::2].clamp(0, w)
-            bx[:, 1::2] = bx[:, 1::2].clamp(0, h)
-            k = batched_nms(bx, s_max, labels, nms_iou)[:max_det]
-            results.append({"boxes": bx[k], "scores": s_max[k], "labels": labels[k]})
-        return results
+        return [postprocess(s, bx, images.shape[-2:], score_thr, nms_iou, max_det, pre_nms,
+                            agnostic, containment)
+                for s, bx in zip(cls.sigmoid(), boxes)]
 
     # ----------------------------------------------------------------- utils
     def ema_step(self) -> None:
@@ -278,3 +276,39 @@ class LiteGTR(nn.Module):
     def deploy_state_dict(self) -> dict:
         """State dict with the EMA teacher stripped -- what ONNX export uses."""
         return {k: v for k, v in self.state_dict().items() if not k.startswith("ema_router.")}
+
+
+def postprocess(scores: torch.Tensor, boxes: torch.Tensor, hw: tuple[int, int],
+                score_thr: float = 0.02, nms_iou: float = 0.6, max_det: int = 500,
+                pre_nms: int = 3000, agnostic: bool = False,
+                containment: float | None = None) -> dict:
+    """One image: ``scores`` (L, C) probabilities, ``boxes`` (L, 4) xyxy -> detections."""
+    h, w = hw
+    s_max, labels = scores.max(-1)
+    keep = s_max > score_thr
+    s_max, labels, bx = s_max[keep], labels[keep], boxes[keep].clone()
+    if s_max.numel() > pre_nms:
+        topv, topi = s_max.topk(pre_nms)
+        s_max, labels, bx = topv, labels[topi], bx[topi]
+    bx[:, 0::2] = bx[:, 0::2].clamp(0, w)
+    bx[:, 1::2] = bx[:, 1::2].clamp(0, h)
+    groups = torch.zeros_like(labels) if agnostic else labels
+    k = batched_nms(bx, s_max, groups, nms_iou)          # sorted by score, descending
+    if containment is not None and k.numel() > 1:
+        k = k[_not_contained(bx[k], groups[k], containment)]
+    k = k[:max_det]
+    return {"boxes": bx[k], "scores": s_max[k], "labels": labels[k]}
+
+
+def _not_contained(bx: torch.Tensor, groups: torch.Tensor, thr: float) -> torch.Tensor:
+    """Keep-mask over score-sorted boxes: drop j if an earlier box of its group covers
+    >= ``thr`` of j's area. Earlier boxes that were themselves dropped still count --
+    after NMS such chains are rare, and it keeps this a single vectorised pass."""
+    area = ((bx[:, 2] - bx[:, 0]) * (bx[:, 3] - bx[:, 1])).clamp_min(1e-6)
+    lt = torch.max(bx[:, None, :2], bx[None, :, :2])
+    rb = torch.min(bx[:, None, 2:], bx[None, :, 2:])
+    inter = (rb - lt).clamp_min(0).prod(-1)                  # (N, N)
+    covered = inter / area[None, :]                          # [i, j]: share of j inside i
+    earlier = torch.ones_like(covered, dtype=torch.bool).triu(1)
+    same = groups[:, None] == groups[None, :]
+    return ~((covered >= thr) & earlier & same).any(0)

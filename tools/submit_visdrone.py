@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from datasets.base import collate_fn  # noqa: E402
 from datasets.builder import build_dataset  # noqa: E402
 from engine.checkpoint import CheckpointManager  # noqa: E402
+from engine.evaluator import postprocess_cfg  # noqa: E402
 from models.build import build_model, load_config  # noqa: E402
 from utils.boxes import unletterbox  # noqa: E402
 
@@ -61,7 +62,10 @@ def main() -> None:
     size = cfg["data"].get("img_size", 640)
     n = 0
     for images, targets in tqdm(loader, desc="submit"):
-        preds = model.predict(images.to(device), score_thr=a.score_thr, max_det=a.max_det)
+        pp = postprocess_cfg(cfg)
+        preds = model.predict(images.to(device), score_thr=a.score_thr, max_det=a.max_det,
+                              nms_iou=pp["nms_iou"], agnostic=pp["agnostic"],
+                              containment=pp["containment"])
         for t, p in zip(targets, preds):
             meta = t["meta"]
             ori_hw = tuple(meta["ori_shape"])

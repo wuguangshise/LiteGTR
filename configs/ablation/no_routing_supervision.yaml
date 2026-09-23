@@ -1,6 +1,8 @@
 # Scorer trained by the score gate and EMA consistency only -- no GT supervision,
-# weight decay on its output conv as before. Bit-for-bit the configuration of the
-# first 200-epoch run (commit 3abbba5), whose score maps collapsed to flat, so that
-# run IS this ablation. Main vs this isolates the routing supervision.
+# weight decay on its output conv. Everything else, including the tiny-object
+# assignment fallback, is the main model's, so main vs this isolates the routing
+# supervision. The first 200-epoch run (commit 3abbba5) had this routing but
+# predates the assigner fix, so it is NOT this ablation and must not be reused
+# as its row; it remains valid only as the evidence that the maps collapse.
 _base_: [../models/model_main.yaml]
 model: {token: {routing_sup: {enabled: false}, scorer_no_decay: false}}

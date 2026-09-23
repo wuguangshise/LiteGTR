@@ -62,7 +62,7 @@ MODEL_CONFIG = r"configs/models/model_main.yaml"
 #     configs/ablation/token_budget_256.yaml        ② 56 个 token 是否足够
 #     configs/ablation/no_geometric_writeback.yaml  ③ 几何先验（主创新）
 #     configs/ablation/no_ema_routing.yaml          ④ 光照一致路由
-#     configs/ablation/no_routing_supervision.yaml  ⑤ 路由监督（提交 3abbba5 的那次训练就是它，不用重跑）
+#     configs/ablation/no_routing_supervision.yaml  ⑤ 路由监督
 #     说明见 configs/ablation/README.md
 #   换实验时记得同时改下面的 NAME，否则会覆盖上一次的输出
 

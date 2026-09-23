@@ -32,7 +32,20 @@ loss:
   token_temperature: 1.0
   token_hard_ratio: 1.0   # <1.0 keeps only the hardest positions
 
+# Post-processing for every evaluation (training-time val, tools/val.py, test.py, submit).
+# Changing it never needs retraining: run tools/diagnose_predictions.py on a checkpoint to
+# compare variants on the real val set, then set the winner here and re-run tools/val.py.
+test:
+  score_thr: 0.02
+  nms_iou: 0.6
+  max_det: 500
+  agnostic: false         # true: one NMS across classes (pedestrian/people duplicates)
+  containment: null       # e.g. 0.8: drop a box >= 80% covered by a higher-scoring one
+
 assigner:
   topk: 13
   alpha: 1.0
   beta: 6.0
+  # GTs that contain no grid centre get their nearest P2 point (assigners/task_aligned_assigner.py).
+  # Without it ~10% of VisDrone boxes at 640 input -- the smallest ones -- are never positives.
+  tiny_fallback: true

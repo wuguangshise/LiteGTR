@@ -44,8 +44,7 @@ EXPERIMENTS = [
     ("abl_token_budget_256",        "configs/ablation/token_budget_256.yaml",           0, "② token 56 -> 256"),
     ("abl_no_geometric_writeback",  "configs/ablation/no_geometric_writeback.yaml",     0, "③ 去掉几何先验"),
     ("abl_no_ema_routing",          "configs/ablation/no_ema_routing.yaml",             0, "④ 去掉 EMA 光照一致路由"),
-    # ⑤ no_routing_supervision 不用跑：提交 3abbba5 的那次训练就是它
-    # ("abl_no_routing_supervision", "configs/ablation/no_routing_supervision.yaml",   0, "⑤ 去掉路由监督"),
+    ("abl_no_routing_supervision",  "configs/ablation/no_routing_supervision.yaml",     0, "⑤ 去掉路由监督"),
     # --- 基线与第二个规模点
     ("base_csp_n",                  "configs/baselines/csp_n.yaml",                     0, "CSP 基线（对应 Main）"),
     ("edge_s",                      "configs/models/model_edge_s.yaml",                 0, "Edge-S 轻量版"),
@@ -97,12 +96,16 @@ def foreign_run(run_dir: Path, cfg_path: str, token_budget=None) -> str:
     import torch
     from models.build import load_config
 
-    saved = (torch.load(last, map_location="cpu", weights_only=False).get("config") or {}).get("model")
-    if saved is None:
+    saved = torch.load(last, map_location="cpu", weights_only=False).get("config") or {}
+    if "model" not in saved:
         return ""
-    want = load_config(REPO / cfg_path)["model"]
-    if _model_cfg(saved) != _model_cfg(want, token_budget):
+    want = load_config(REPO / cfg_path)
+    if _model_cfg(saved["model"]) != _model_cfg(want["model"], token_budget):
         return f"last.pt 的模型配置和 {cfg_path} 不一致，是别的实验"
+    # 分配器和损失也算实验定义：修复前（没有 tiny_fallback）的训练不能被当成同一个实验续训
+    for key in ("assigner", "loss"):
+        if saved.get(key, {}) != want.get(key, {}):
+            return f"last.pt 的 {key} 配置和当前代码不一致（多半是修复前的旧训练）"
     return ""
 
 
