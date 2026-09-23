@@ -14,6 +14,18 @@ from engine.evaluator import collect_token_stats, evaluate
 from engine.recorder import Recorder
 
 
+def _sig(v: float, digits: int = 5) -> float:
+    """Round to significant figures, not decimal places.
+
+    ``round(v, 5)`` keeps five DECIMAL places, so any loss below 5e-6 is written
+    as 0.0 -- to the log and to results.csv, where the precision is then gone for
+    good. Small terms such as the token-consistency loss are exactly the ones you
+    need to see. Five significant figures leaves ordinary values unchanged
+    (0.93329 stays 0.93329) while keeping 4.9e-06 as 4.9e-06.
+    """
+    return float(f"{v:.{digits}g}")
+
+
 def build_optimizer(model, cfg: dict):
     t = cfg.get("optimizer", "adamw").lower()
     lr = cfg.get("lr", 1e-3)
@@ -108,7 +120,7 @@ class Trainer:
         for epoch in range(self.start_epoch, self.epochs + 1):
             t0 = time.time()
             tr = self.train_one_epoch(epoch)
-            row = {"epoch": epoch, **{f"train/{k}": round(v, 5) for k, v in tr.items()},
+            row = {"epoch": epoch, **{f"train/{k}": _sig(v) for k, v in tr.items()},
                    "lr": self.scheduler.get_last_lr()[0]}
 
             if epoch % self.cfg["train"].get("val_interval", 1) == 0 or epoch == self.epochs:
@@ -119,7 +131,7 @@ class Trainer:
                 save_dir = self.recorder.dir if epoch == self.epochs else None
                 overall, by_cond = evaluate(eval_model, self.val_loader, self.device,
                                             self.classes, amp=self.amp, save_dir=save_dir)
-                row.update({f"val/{k}": round(v, 5) for k, v in overall.items()})
+                row.update({f"val/{k}": _sig(v) for k, v in overall.items()})
                 if by_cond:
                     self.recorder.log_conditions(epoch, by_cond)
                     self.recorder.logger.info(
