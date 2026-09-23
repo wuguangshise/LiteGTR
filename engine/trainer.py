@@ -56,7 +56,7 @@ def build_scheduler(optimizer, cfg: dict, steps_per_epoch: int):
     good basin.
 
     The decay floor is ``final_lr_ratio`` of the base rate. DEIM's 0.5 is tuned
-    for a ~58-epoch fine-tune of a pretrained backbone; a 300-epoch from-scratch
+    for a ~58-epoch fine-tune of a pretrained backbone; a 200-epoch from-scratch
     run keeps the conventional low floor.
     """
     epochs = cfg["epochs"]

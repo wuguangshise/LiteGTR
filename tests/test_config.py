@@ -4,7 +4,7 @@ from models.build import load_config
 
 def test_base_inheritance_merges_deeply():
     cfg = load_config("configs/models/model_main.yaml")
-    assert cfg["train"]["epochs"] == 300
+    assert cfg["train"]["epochs"] == 200
     assert cfg["model"]["backbone"]["channels"] == [32, 64, 128, 192]
 
 

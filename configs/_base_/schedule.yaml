@@ -1,5 +1,5 @@
 train:
-  epochs: 300             # from-scratch training needs a long schedule (P1-6)
+  epochs: 200             # from scratch (P1-6). Changing this? Rescale the four values marked (*)
   batch_size: 16
   val_batch_size: 16
   optimizer: adamw
@@ -9,14 +9,14 @@ train:
   # FlatCosine (DEIM, CVPR 2025): hold the peak LR for about half the run, then
   # cosine-decay. Helps most when training from scratch.
   scheduler: flat_cosine    # flat_cosine | cosine
-  flat_epochs: 150
+  flat_epochs: 100         # (*) half of epochs, the DEIM ratio
   final_lr_ratio: 0.01      # decay floor; DEIM's 0.5 is for a ~58-epoch fine-tune
   # Mosaic off for the final epochs (YOLO close_mosaic=10, DEIM no_aug_epoch=8)
-  no_aug_epochs: 15
+  no_aug_epochs: 10        # (*) ~5% of epochs, at least 10
   amp: true
   grad_clip: 10.0
   val_interval: 5           # validation cannot change the weights, only best.pt granularity
-  val_dense_last: 30        # ...and every epoch over the final 30, where the best epoch lands
+  val_dense_last: 20        # (*) every epoch over the final ~10%, where the best epoch lands
   save_period: 0          # >0 also writes epoch_xx.pt
   monitor: mAP50_95
   model_ema:              # weight EMA; distinct from the token-routing teacher

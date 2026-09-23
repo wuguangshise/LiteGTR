@@ -35,3 +35,15 @@ def test_schedule_constants_are_consistent():
 def test_repo_is_located_without_configuration():
     assert T.REPO_ROOT == "", "the script sits in the repo root; auto-detection should find it"
     assert T.locate_repo().resolve() == ROOT
+
+
+def test_script_schedule_matches_the_yaml_schedule():
+    """The two entry points must train with the same schedule, or runs launched
+    from train_litegtr.py and tools/train.py are not comparable. The script
+    derives these from EPOCHS; the YAML states them. Changing epochs in one
+    place without the other would make this fail."""
+    t = load_config(ROOT / "configs/_base_/schedule.yaml")["train"]
+    assert (T.EPOCHS, T.WARMUP_EPOCHS, T.FLAT_EPOCHS, T.NO_AUG_EPOCHS, T.VAL_DENSE_LAST) == \
+           (t["epochs"], t["warmup_epochs"], t["flat_epochs"], t["no_aug_epochs"], t["val_dense_last"])
+    assert T.VAL_INTERVAL == t["val_interval"] and T.FINAL_LR_RATIO == t["final_lr_ratio"]
+    assert T.NO_AUG_EPOCHS <= T.VAL_DENSE_LAST, "the mosaic-off phase must be densely validated"

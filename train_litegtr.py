@@ -65,7 +65,7 @@ MODEL_CONFIG = r"configs/models/model_main.yaml"
 #   换实验时记得同时改下面的 NAME，否则会覆盖上一次的输出
 
 # 训练参数
-EPOCHS = 300
+EPOCHS = 200
 BATCH_SIZE = 16          # 显存不够就降：16 / 8 / 4
 VAL_BATCH_SIZE = 16
 IMG_SIZE = 640
@@ -75,17 +75,18 @@ WORKERS = 8              # Windows 下若报多进程错误，改成 0
 # 优化器 —— AdamW，ConvNeXt 从零训练配方
 #   backbone 是 ConvNeXt 结构（原论文即用 AdamW），token 路径含注意力和 LayerNorm
 #   注意：D-FINE/DEIM 的 lr 2.5e-4 / wd 1.25e-4 / 裁剪 0.1 是"预训练 backbone +
-#   72 轮微调"的参数，从零训练 300 轮照搬会训不动，故不采用
+#   72 轮微调"的参数，从零训练 200 轮照搬会训不动，故不采用
 OPTIMIZER = "adamw"      # 'adamw' / 'sgd'
 LR0 = 0.001              # AdamW 0.001；若改 SGD 用 0.01
 WEIGHT_DECAY = 0.05      # AdamW 0.05；若改 SGD 用 0.0005
 GRAD_CLIP = 10.0         # 安全阀（YOLO 同值）；0.1 是 DETR 专用
 
 # 学习率调度 —— FlatCosine（DEIM, CVPR 2025）
-#   warmup -> 峰值平台期 -> 余弦衰减。DEIM 平台期约占总轮数一半
+#   warmup -> 峰值平台期 -> 余弦衰减。
+#   下面几个与总轮数挂钩的量都由 EPOCHS 推导，改 EPOCHS 时会自动按比例缩放。
 SCHEDULER = "flat_cosine"  # 'flat_cosine' / 'cosine'
-WARMUP_EPOCHS = 3
-FLAT_EPOCHS = 150          # 峰值学习率保持到第几轮（建议 EPOCHS 的一半）
+WARMUP_EPOCHS = 3          # 预热按步数算（约 1200 步），与总轮数无关，固定
+FLAT_EPOCHS = EPOCHS // 2  # 峰值平台期占一半（DEIM：flat_epoch 29 / 约 58）
 FINAL_LR_RATIO = 0.01      # 衰减终点 = LR0 * 该值
 
 # 权重 EMA —— D-FINE (ICLR 2025) 与 Ultralytics YOLO 均用 0.9999
@@ -93,7 +94,7 @@ EMA_DECAY = 0.9999
 
 # 数据增强
 MOSAIC_PROB = 0.5
-NO_AUG_EPOCHS = 15       # 最后 N 轮关闭 mosaic（YOLO close_mosaic=10，DEIM no_aug_epoch=8）
+NO_AUG_EPOCHS = max(10, EPOCHS // 20)  # 最后约 5% 关 mosaic，至少 10 轮（YOLO close_mosaic=10）
 
 # Token 预算（None = 用模型配置里的值）
 # 例：{"P3": 64, "P4": 48, "P5": 16}，必须能被对应 grid^2 整除
@@ -105,7 +106,7 @@ NAME = "litegtr_visdrone"
 SEED = 0
 AMP = True
 VAL_INTERVAL = 5         # 每 N 轮验证一次（验证不改变权重，只影响 best.pt 的挑选粒度）
-VAL_DENSE_LAST = 30      # 最后 N 轮每轮都验证：最佳轮次落在衰减末段，这里保持逐轮
+VAL_DENSE_LAST = max(NO_AUG_EPOCHS, EPOCHS // 10)  # 最后约 10% 逐轮验证，覆盖关 mosaic 阶段
 SAVE_PERIOD = 0          # >0 时额外保存 epoch_xx.pt
 RESUME = ""              # 续训：填 runs/train/<NAME>/weights/last.pt
                          # 其余参数（尤其 MODEL_CONFIG、EPOCHS）必须和原训练一致

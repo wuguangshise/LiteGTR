@@ -184,7 +184,7 @@ offline pipeline:
    large. The cache build prints the distribution; 3 seeds are mandatory.
 
 **Why a cache instead of a conversion** (`datasets/label_cache.py`): parsing XML
-per sample per epoch makes the DataLoader the bottleneck at ~28k images × 300
+per sample per epoch makes the DataLoader the bottleneck at ~28k images × 200
 epochs, but converting to flat label files permanently discards the rotation
 angle and creates a derived artefact that can drift out of sync. The cache keeps
 the XML as the single source of truth, parses once, and stores the **oriented**

@@ -3,7 +3,7 @@
 Why cache rather than convert
 -----------------------------
 Parsing XML per sample per epoch is genuinely slow: DroneVehicle is ~28k images,
-and at 300 epochs with several workers the DataLoader becomes the bottleneck.
+and at 200 epochs with several workers the DataLoader becomes the bottleneck.
 But converting to a flat label file on disk throws information away permanently
 (the rotation angle, most importantly) and creates a derived artefact that can
 silently drift out of sync with the annotations.
