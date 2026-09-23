@@ -1,0 +1,10 @@
+# Q: Does LOCAL candidate routing matter?
+#
+# grid = 1 on every level turns local routing (top-k inside each grid cell) into
+# a single global top-k over the whole map. Same 56-token budget. The design
+# claim is that global top-k collapses onto a few salient blobs and starves
+# dense regions -- which on VisDrone is where most objects are.
+_base_: [../models/model_main.yaml]
+model:
+  token:
+    grids: {P3: 1, P4: 1, P5: 1}

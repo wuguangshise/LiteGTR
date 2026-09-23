@@ -15,6 +15,15 @@ CONFIGS = [
     "configs/ablation/no_geometric_writeback.yaml",
     "configs/ablation/broadcast_writeback.yaml",
     "configs/ablation/token_budget_128.yaml",
+    "configs/ablation/mixer_none.yaml",
+    "configs/ablation/mixer_deep.yaml",
+    "configs/ablation/global_topk_routing.yaml",
+    "configs/ablation/token_src_p5.yaml",
+    "configs/ablation/token_src_p4p5.yaml",
+    "configs/ablation/writeback_p2.yaml",
+    "configs/ablation/random_routing.yaml",
+    "configs/ablation/no_ema_routing.yaml",
+    "configs/ablation/ema_same_view.yaml",
 ]
 
 

@@ -89,7 +89,7 @@ python tools/train.py --config configs/datasets/visdrone_rgb.yaml configs/models
 
 # baselines run the SAME neck, head, losses, assigner, augmentation and schedule
 python tools/train.py --config configs/datasets/visdrone_rgb.yaml configs/baselines/csp_n.yaml
-python tools/train.py --config configs/datasets/visdrone_rgb.yaml configs/baselines/tinynext_no_token.yaml
+python tools/train.py --config configs/datasets/visdrone_rgb.yaml configs/ablation/no_global_token.yaml
 
 python tools/val.py   --config configs/datasets/dronevehicle_rgb.yaml configs/models/model_main.yaml \
                       --weights runs/train/<name>/weights/best.pt

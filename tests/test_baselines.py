@@ -12,7 +12,6 @@ from models.build import build_model, load_config  # noqa: E402
 BASELINES = [
     "configs/baselines/csp_n.yaml",
     "configs/baselines/csp_t.yaml",
-    "configs/baselines/tinynext_no_token.yaml",
 ]
 
 

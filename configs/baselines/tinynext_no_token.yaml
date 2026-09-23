@@ -1,6 +1,0 @@
-# TinyNeXt backbone, no token path: isolates the backbone's own contribution
-# from the global-token contribution in the main table.
-_base_: [../models/model_main.yaml]
-model:
-  token:
-    enabled: false

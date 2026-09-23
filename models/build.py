@@ -30,6 +30,20 @@ def load_config(*paths: str | Path) -> dict:
     return cfg
 
 
+def active_token_count(token_cfg: dict) -> int:
+    """Tokens actually selected: the budget summed over the ACTIVE levels only.
+
+    YAML ``_base_`` merging overrides keys but never deletes them, so an ablation
+    that narrows ``levels`` (e.g. to ``[P5]``) still inherits the base config's
+    ``P3``/``P4`` budget entries. The selector ignores them -- it only builds
+    levels listed in ``levels`` -- but ``sum(budget.values())`` would report the
+    wrong number.
+    """
+    if not token_cfg.get("enabled", True):
+        return 0
+    return sum(token_cfg["budget"][lv] for lv in token_cfg["levels"])
+
+
 def build_model(cfg: dict):
     # imported lazily so load_config() works without torch installed
     from models.detector import LiteGTR

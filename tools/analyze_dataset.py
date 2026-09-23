@@ -24,7 +24,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from datasets.builder import build_dataset  # noqa: E402
-from models.build import load_config  # noqa: E402
+from models.build import active_token_count, load_config  # noqa: E402
 from utils.boxes import box_areas, size_bucket  # noqa: E402
 
 
@@ -99,8 +99,8 @@ def main() -> None:
 
     # --- the token-budget read-out -------------------------------------------
     tok = cfg.get("model", {}).get("token", {})
-    if tok.get("budget"):
-        budget = sum(tok["budget"].values())
+    if tok.get("budget") and tok.get("enabled", True):
+        budget = active_token_count(tok)
         L.append("")
         L.append("token budget check (P0-3)")
         L.append(f"  configured budget      : {budget}")

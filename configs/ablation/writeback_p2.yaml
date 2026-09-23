@@ -1,0 +1,10 @@
+# Q: Does writing global context into the stride-4 level help small objects?
+#
+# Main writes back to P3/P4/P5 only. This adds P2. Attention cost is linear in
+# pixels (HW x N), so it stays tractable, but P2 is 160x160 at 640 input: the
+# geometric-prior tensor grows by ~25600 x 56 per image. If you hit OOM, lower
+# BATCH_SIZE for this run only -- and note it, since batch size affects results.
+_base_: [../models/model_main.yaml]
+model:
+  token:
+    writeback_levels: [P2, P3, P4, P5]

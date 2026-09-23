@@ -238,7 +238,7 @@ so a baseline cannot silently drift out of the protocol.
 |---|---|
 | `baselines/csp_n.yaml` | YOLOv8n-class extractor vs TinyNeXt, token path off |
 | `baselines/csp_t.yaml` | smaller CSP, the Edge-S comparison point |
-| `baselines/tinynext_no_token.yaml` | separates the backbone's gain from the token path's gain |
+| `ablation/no_global_token.yaml` | TinyNeXt with the token path off: separates the backbone's gain from the token path's gain. One run serves both the baseline table and the ablation table. |
 
 ---
 
@@ -274,6 +274,10 @@ DataLoader workers.
 
 ## 6. Experiment matrix
 
+Every ablation lives in `configs/ablation/` and changes exactly one variable relative to
+`models/model_main.yaml`. `configs/ablation/README.md` indexes them by paper table with the
+question each one answers and a suggested run order.
+
 | group | config | question |
 |---|---|---|
 | Main vs baselines | `models/model_main.yaml` | accuracy at equal params/FLOPs |
@@ -283,6 +287,10 @@ DataLoader workers.
 | No P2 | `ablation/no_p2` | is the high-res branch worth its MACs |
 | Writeback mode | `no_geometric_writeback`, `broadcast_writeback` | **isolates the primary claim** |
 | No FPN | `ablation/no_fpn` | cross-scale fusion value |
+| Token source levels | `ablation/token_src_p5`, `token_src_p4p5` | do the finer levels need to contribute tokens? (budget and write-back fixed) |
+| Routing locality | `ablation/global_topk_routing` | does local candidate routing matter vs. one global top-k? |
+| Token interaction | `ablation/mixer_none`, `mixer_deep` | **does token-to-token attention matter**; is Transformer capacity the bottleneck? |
+| Write-back into P2 | `ablation/writeback_p2` | does global context help at stride 4, where small objects live? |
 | Random routing | `ablation/random_routing` | **is learned selection better than random?** |
 | No EMA routing | `ablation/no_ema_routing` | value of the photometric consistency term |
 | Same-view EMA | `ablation/ema_same_view` | why the asymmetric view is necessary |
