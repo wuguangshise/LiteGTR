@@ -48,8 +48,15 @@ prints the real number so the paper never quotes an aspirational one.
 
 ### P0-1 Backbone re-balanced
 `models/backbone/tinynext.py`, `utils/budget.py`. Stage 4 depth 4→2 and width
-256→192. Enforced by `tests/test_param_budget.py`, which fails the build if the
-backbone exceeds 60% of deployment parameters.
+256→192. `tests/test_param_budget.py` fails the build if the backbone grows past
+2.5M, i.e. drifts back toward the original 3.76M design.
+
+The backbone still accounts for ~87% of deployment parameters (2.03M of 2.33M):
+neck, head and token path are deliberately light, and the Transformer part is
+only ~4%. An earlier target of "at most 60%" was never met by the locked model.
+If the global path proves worth scaling, the levers are more mixer layers and a
+token width decoupled from `neck.channels` -- widening the neck would mostly
+grow the CNN side, P2 in particular.
 
 ### P0-2 P2 is cheap by construction
 `models/head/gfl_head.py` gives P2 **one** depthwise-separable stem conv
