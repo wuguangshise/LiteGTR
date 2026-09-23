@@ -55,3 +55,31 @@ def test_no_arguments_leaves_the_constants_alone(monkeypatch):
     before = (T.MODEL_CONFIG, T.NAME, T.RESUME, T.SEED)
     T.apply_cli_overrides([])
     assert (T.MODEL_CONFIG, T.NAME, T.RESUME, T.SEED) == before
+
+
+def _save_last(run, cfg_path, epoch=10):
+    from models.build import load_config
+
+    (run / "weights").mkdir(parents=True, exist_ok=True)
+    cfg = load_config(R.REPO / cfg_path)
+    cfg["model"]["num_classes"] = 10                     # written at runtime by the trainer
+    torch.save({"epoch": epoch, "config": cfg}, run / "weights" / "last.pt")
+
+
+def test_own_run_is_not_foreign(tmp_path):
+    _save_last(tmp_path / "main", "configs/models/model_main.yaml")
+    assert R.foreign_run(tmp_path / "main", "configs/models/model_main.yaml") == ""
+    assert R.foreign_run(tmp_path / "empty", "configs/models/model_main.yaml") == ""
+
+
+def test_run_with_another_config_is_refused(tmp_path):
+    """The first 200-epoch run has the no_routing_supervision config: it must never be
+    skipped as 'main is done' nor resumed as main."""
+    _save_last(tmp_path / "main", "configs/ablation/no_routing_supervision.yaml", epoch=200)
+    assert R.foreign_run(tmp_path / "main", "configs/models/model_main.yaml")
+
+
+def test_results_without_checkpoint_is_refused(tmp_path):
+    (tmp_path / "x").mkdir()
+    (tmp_path / "x" / "results.csv").write_text("epoch\n1\n")
+    assert R.foreign_run(tmp_path / "x", "configs/models/model_main.yaml")

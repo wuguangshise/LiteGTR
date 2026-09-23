@@ -16,6 +16,10 @@ LiteGTR 批量实验 —— 按顺序把论文需要的实验一次跑完
 某个实验出错时默认记下来、继续跑下一个（STOP_ON_ERROR 可改）。
 
 每跑完一个实验，都会把所有实验的最佳指标汇总到 runs/train/experiments_summary.csv。
+
+输出位置：每个实验写到 runs/train/<NAME>/（NAME 是下面列表的第一列），互不覆盖。
+如果 runs/train/<NAME>/ 已经存在、但里面是别的配置训练出来的，本脚本不会跳过、
+不会续训、也不会覆盖它，而是报 conflict 并跳到下一个实验。
 """
 import csv
 import subprocess
@@ -65,7 +69,41 @@ def train_constants() -> dict:
     """train_litegtr.py 的常量：轮数和输出目录以它为准，两边永远一致。"""
     sys.path.insert(0, str(REPO))
     import train_litegtr as t
-    return {"epochs": t.EPOCHS, "project": REPO / t.PROJECT}
+    return {"epochs": t.EPOCHS, "project": REPO / t.PROJECT, "token_budget": t.TOKEN_BUDGET}
+
+
+def _model_cfg(model: dict, token_budget=None) -> dict:
+    """比较用的模型配置：去掉运行时才写入的 num_classes，套上 TOKEN_BUDGET 覆盖。"""
+    import copy
+    m = copy.deepcopy(model)
+    m.pop("num_classes", None)
+    if token_budget is not None and "token" in m:
+        m["token"]["budget"] = dict(token_budget)
+    return m
+
+
+def foreign_run(run_dir: Path, cfg_path: str, token_budget=None) -> str:
+    """同名目录里是不是别的实验。是的话返回原因，否则返回空字符串。
+
+    last.pt 每一轮都会保存，所以只有 results.csv、没有 last.pt 的目录不可能是
+    本实验跑到一半留下的；last.pt 里存的模型配置和本实验不同，说明是别的训练。
+    这两种情况都不能跳过、不能续训、也不能在里面从头训练（results.csv 会被追加）。
+    """
+    last = run_dir / "weights" / "last.pt"
+    if not last.exists():
+        if (run_dir / "results.csv").exists():
+            return "目录里有 results.csv 但没有 last.pt，不是本实验留下的"
+        return ""
+    import torch
+    from models.build import load_config
+
+    saved = (torch.load(last, map_location="cpu", weights_only=False).get("config") or {}).get("model")
+    if saved is None:
+        return ""
+    want = load_config(REPO / cfg_path)["model"]
+    if _model_cfg(saved) != _model_cfg(want, token_budget):
+        return f"last.pt 的模型配置和 {cfg_path} 不一致，是别的实验"
+    return ""
 
 
 def last_epoch(run_dir: Path) -> int:
@@ -132,6 +170,12 @@ def main() -> None:
     t_all = time.time()
     for i, (name, cfg, seed, note) in enumerate(todo, 1):
         run = project / name
+        why = foreign_run(run, cfg, tc["token_budget"])
+        if why:
+            outcome[name] = "conflict"
+            print(f"[{i}/{len(todo)}] {name:28s} !! 已存在同名目录，没有动它：{why}\n"
+                  f"        把 {run} 改名或移走后再运行，本实验会从头训练")
+            continue
         done = last_epoch(run)
         cmd = [sys.executable, str(TRAIN), "--model-config", cfg, "--name", name, "--seed", str(seed)]
         if done >= epochs:
@@ -174,7 +218,7 @@ def main() -> None:
 
     if not a.dry_run:
         path = write_summary(project, epochs, outcome)
-        failed = [n for n, s in outcome.items() if s.startswith("failed")]
+        failed = [n for n, s in outcome.items() if s.startswith("failed") or s == "conflict"]
         print("=" * 72)
         print(f"全部结束，总用时 {(time.time() - t_all) / 3600:.2f} h   汇总: {path}")
         if failed:
