@@ -117,6 +117,15 @@ class LiteGTR(nn.Module):
     def loss(self, images: torch.Tensor, targets: list[dict]) -> dict:
         cls_scores, bbox_preds, feats = self(images)
         cls, reg, boxes, points, strides = self.head.decode(cls_scores, bbox_preds, feats)
+
+        # AMP: compute the loss in fp32. Under autocast the head emits half, but
+        # ground truth arrives from the DataLoader as float32, so the assigner's
+        # IoU silently promotes and writing its result back into a half target
+        # tensor raises. Casting here fixes that at the root, and QFL/DFL/GIoU are
+        # numerically better behaved in fp32 anyway -- the standard AMP arrangement.
+        cls, reg, boxes = cls.float(), reg.float(), boxes.float()
+        points, strides = points.float(), strides.float()
+
         b = cls.shape[0]
         device = cls.device
 

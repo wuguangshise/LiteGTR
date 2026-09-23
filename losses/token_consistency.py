@@ -30,7 +30,9 @@ class TokenConsistencyLoss(nn.Module):
                 teacher_maps: dict[str, torch.Tensor]) -> torch.Tensor:
         losses = []
         for lv, s in student_maps.items():
-            t = teacher_maps[lv].detach()
+            # fp32: a spatial softmax over H*W positions underflows badly in half
+            s = s.float()
+            t = teacher_maps[lv].detach().float()
             b = s.shape[0]
             s_flat = s.reshape(b, -1) / self.t
             t_flat = t.reshape(b, -1) / self.t
