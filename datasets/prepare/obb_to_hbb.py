@@ -1,4 +1,14 @@
-"""Convert DroneVehicle oriented boxes to axis-aligned boxes.
+"""OPTIONAL export: DroneVehicle oriented boxes -> axis-aligned label files.
+
+Training no longer needs this. ``datasets/dronevehicle.py`` reads the XML
+natively, caches the parsed *oriented* boxes once, and derives the HBB in
+memory -- so the conversion policy stays a code decision and the rotation angle
+is never thrown away.
+
+Use this only to hand flat label files to some other tool, or to inspect the
+conversion outside the training loop.
+
+Convert DroneVehicle oriented boxes to axis-aligned boxes.
 
 Protocol note for the paper (docs/DESIGN.md P0-5 / P1-10): published
 DroneVehicle numbers are OBB mAP and are NOT comparable to what this produces.

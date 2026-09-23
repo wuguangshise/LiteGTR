@@ -1,4 +1,14 @@
-"""Strip DroneVehicle's 100-px white border and shift annotations accordingly.
+"""DEPRECATED -- the dataset now crops the border losslessly at load time.
+
+Do not use this for training data. It decodes and RE-ENCODES every image, and on
+a JPEG source that round-trip adds compression artefacts at exactly the scale a
+12-px vehicle occupies. ``datasets/dronevehicle.py`` does the same crop as a
+numpy slice, which is free and lossless, so there is nothing to gain here.
+
+Kept only for the case where you need physically cropped copies for an external
+tool. Training should point at the ORIGINAL download.
+
+Strip DroneVehicle's 100-px white border and shift annotations accordingly.
 
 WHY THIS EXISTS (docs/DESIGN.md P0-5, the single easiest way to silently ruin
 this dataset): DroneVehicle ships 840x712 images with a ~100 px white margin on

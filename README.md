@@ -49,21 +49,26 @@ than objects on a typical image, sweep the budget before anything else.
 
 VisDrone needs no preprocessing — point `configs/datasets/visdrone_rgb.yaml` at it.
 
-DroneVehicle needs two passes, then an **eyeball check** (see DESIGN.md P0-5):
+DroneVehicle needs **no preprocessing** — point the config at the original
+download. Annotations are read natively from the XML and cached once; the 100-px
+white margin is cropped losslessly at load time.
+
+Optional, before the cross-illumination table:
 
 ```bash
-python -m datasets.prepare.crop_dronevehicle_border \
-    --src  RAW/train/rgb      --dst  PREP/train/rgb \
-    --ann-src RAW/train/rgb_xml --ann-dst PREP/train/rgb_xml
-python -m datasets.prepare.obb_to_hbb \
-    --ann-dir PREP/train/rgb_xml --out-dir PREP/train/hbb_labels
+python -m datasets.prepare.make_conditions \
+    --img-dir <root>/val/rgb --out <root>/val/conditions.txt
+```
 
+Then check alignment by eye — for either dataset:
+
+```bash
 python tools/visualize_labels.py --config configs/datasets/dronevehicle_rgb.yaml \
     --split train --num 20 --out runs/label_check
 ```
 
-Open `runs/label_check/`. Boxes must sit **on** the vehicles. A missing
-coordinate shift does not raise an error — it just trains a wrong model.
+Open `runs/label_check/`. Boxes must sit **on** the vehicles. A border offset that
+was never applied does not raise an error — it just trains a wrong model.
 
 **4. Sweep the token budget before the main experiment.**
 

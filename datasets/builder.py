@@ -28,8 +28,10 @@ def build_dataset(cfg: dict, split: str, train: bool) -> DetectionDataset:
 
         return DroneVehicleDataset(
             modality=d.get("modality", "rgb"),
-            label_dirname=d.get("label_dirname", "hbb_labels"),
+            ann_dirname=d.get("ann_dirname"),
             conditions_file=d.get("conditions_file"),
+            rebuild_cache=d.get("rebuild_cache", False),
+            border=d.get("border", -1),
             **common,
         )
     raise ValueError(f"unknown dataset: {d['name']!r} (expected 'visdrone' or 'dronevehicle')")

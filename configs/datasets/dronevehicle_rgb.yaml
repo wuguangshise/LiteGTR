@@ -1,13 +1,23 @@
-# Run BOTH prepare scripts before first use, then tools/visualize_labels.py:
-#   python -m datasets.prepare.crop_dronevehicle_border ...   (P0-5 (1))
-#   python -m datasets.prepare.obb_to_hbb ...                 (P0-5 (2))
+# Point this at the ORIGINAL DroneVehicle download -- no preprocessing required.
+# Annotations are read natively from the XML and cached once; the 100-px white
+# margin is cropped losslessly at load time (docs/DESIGN.md P0-5).
+#
+# Optional, and recommended before the cross-illumination table:
+#   python -m datasets.prepare.make_conditions --img-dir <root>/val/rgb \
+#       --out <root>/val/conditions.txt
+#
+# Always confirm alignment by eye before training:
+#   python tools/visualize_labels.py --config configs/datasets/dronevehicle_rgb.yaml \
+#       --split train --num 20 --out runs/label_check
 data:
   name: dronevehicle
-  root: D:/data/DroneVehicle_cropped
+  root: D:/data/DroneVehicle
   train_split: train
   val_split: val
   test_split: test
   modality: rgb
-  label_dirname: hbb_labels
+  # ann_dirname: rgb_xml     # only if auto-detection fails
+  # border: 100              # only to override the auto-detected white margin
+  # rebuild_cache: true      # force a re-parse after editing annotations
   img_size: 640
   mosaic_prob: 0.5

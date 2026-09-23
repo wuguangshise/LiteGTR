@@ -84,18 +84,37 @@ the identical discrete selection and the exported graph is unchanged. The
 teacher is an EMA of the **scorers only** and is stripped from
 `deploy_state_dict()`, so deployment cost is unaffected.
 
-### P0-5 DroneVehicle data preparation
-Three traps, all handled in `datasets/prepare/`:
+### P0-5 DroneVehicle: read the XML, rewrite nothing
 
-1. **100-px white border.** Images ship at 840×712 with true content 640×512,
-   and **annotations are in padded coordinates**. Cropping without shifting
-   labels raises no error — it just trains a wrong model.
-   → `crop_dronevehicle_border.py` (auto-detects the margin, so an
-   already-cropped copy is a no-op) then **`tools/visualize_labels.py`**.
-2. **OBB → HBB.** `obb_to_hbb.py` handles `polygon`, `robndbox` and `bndbox`,
-   plus the released annotations' class-name typos (`feright_car` → `freight_car`).
+Three traps, all handled inside `datasets/dronevehicle.py` rather than by an
+offline pipeline:
+
+1. **100-px white border.** Images ship at 840×712 with 640×512 of content, and
+   **annotations are in padded coordinates**. Cropping without shifting labels
+   raises no error — it just trains a wrong model. The border is derived from the
+   XML's declared size (no image decode needed for the known case) and applied as
+   a **numpy slice at load time**.
+
+   The earlier pipeline decoded and *re-encoded* every image to crop it. On a
+   JPEG source that round trip adds compression artefacts at exactly the scale a
+   12-px vehicle occupies — a bad trade in a paper about small objects, and
+   unnecessary, since the slice is free and lossless.
+   `datasets/prepare/crop_dronevehicle_border.py` is retained but deprecated.
+
+2. **OBB → HBB.** Handled in memory from `polygon`, `robndbox` or `bndbox`, plus
+   the released annotations' class-name typos (`feright_car` → `freight_car`).
+   `datasets/prepare/obb_to_hbb.py` is now an optional export, not a required step.
+
 3. **Class imbalance.** `car` dominates the five classes, so seed variance is
-   large — `obb_to_hbb.py` prints the distribution and 3 seeds are mandatory.
+   large. The cache build prints the distribution; 3 seeds are mandatory.
+
+**Why a cache instead of a conversion** (`datasets/label_cache.py`): parsing XML
+per sample per epoch makes the DataLoader the bottleneck at ~28k images × 300
+epochs, but converting to flat label files permanently discards the rotation
+angle and creates a derived artefact that can drift out of sync. The cache keeps
+the XML as the single source of truth, parses once, and stores the **oriented**
+boxes — so changing the OBB→HBB policy, or adding an oriented head later, is a
+code change rather than a data-regeneration job (`DroneVehicleDataset.obb()`).
 
 ---
 
