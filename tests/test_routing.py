@@ -15,7 +15,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from models.build import build_model, load_config  # noqa: E402
-from models.token.ema_token_router import photometric_view, preserved_bn_stats  # noqa: E402
+from models.token.ema_token_router import bn_batch_stats_only, photometric_view  # noqa: E402
 
 
 def _model(path, **token_overrides):
@@ -103,14 +103,34 @@ def test_teacher_branch_leaves_batchnorm_running_stats_untouched():
     assert before  # student pass is allowed to update them; the teacher pass is not
 
 
-def test_preserved_bn_stats_restores_on_exception():
+def test_backward_succeeds_with_the_photometric_teacher():
+    """Regression: the teacher pass used to write BatchNorm running stats in place
+    (and then copy_() them back) between the student's forward and backward,
+    which fails with 'modified by an inplace operation: [torch.cuda.FloatTensor
+    [64]]'. A full loss + backward on the main config must not raise."""
+    model = _model("configs/models/model_main.yaml")
+    losses = model.loss(torch.randn(2, 3, 256, 256), _targets())
+    sum(losses.values()).backward()
+
+
+def test_bn_batch_stats_only_performs_no_inplace_write():
+    """The version counter is what autograd checks, so assert on it directly."""
     bn = torch.nn.BatchNorm2d(4).train()
-    rm = bn.running_mean.clone()
+    v_mean, v_var = bn.running_mean._version, bn.running_var._version
+    rm, nb = bn.running_mean.clone(), bn.num_batches_tracked.clone()
+    with bn_batch_stats_only(bn):
+        bn(torch.randn(2, 4, 3, 3) * 10 + 5)
+    assert bn.running_mean._version == v_mean and bn.running_var._version == v_var
+    assert torch.equal(bn.running_mean, rm) and torch.equal(bn.num_batches_tracked, nb)
+    assert bn.track_running_stats is True
+
+
+def test_bn_batch_stats_only_restores_the_flag_on_exception():
+    bn = torch.nn.BatchNorm2d(4).train()
     with pytest.raises(RuntimeError):
-        with preserved_bn_stats(bn):
-            bn(torch.randn(2, 4, 3, 3) * 10 + 5)
+        with bn_batch_stats_only(bn):
             raise RuntimeError("boom")
-    assert torch.equal(bn.running_mean, rm)
+    assert bn.track_running_stats is True
 
 
 def test_consistency_loss_is_live_under_the_photometric_view():

@@ -8,6 +8,8 @@ from pathlib import Path
 import torch
 from tqdm import tqdm
 
+from torch.utils.data import DataLoader, RandomSampler
+
 from engine.checkpoint import CheckpointManager
 from engine.ema import ModelEMA
 from engine.evaluator import collect_token_stats, evaluate
@@ -44,16 +46,35 @@ def build_optimizer(model, cfg: dict):
 
 
 def build_scheduler(optimizer, cfg: dict, steps_per_epoch: int):
+    """Linear warmup, then either plain cosine or flat-then-cosine.
+
+    ``flat_cosine`` (DEIM, CVPR 2025 -- ``lrsheduler: flatcosine``) holds the peak
+    learning rate for ``flat_epochs`` before the cosine decay begins. DEIM holds
+    it for about half the schedule (``flat_epoch: 29`` of ~58). Training from
+    scratch benefits most: the network spends longer at a learning rate high
+    enough to move, instead of starting to decay while it is still far from a
+    good basin.
+
+    The decay floor is ``final_lr_ratio`` of the base rate. DEIM's 0.5 is tuned
+    for a ~58-epoch fine-tune of a pretrained backbone; a 300-epoch from-scratch
+    run keeps the conventional low floor.
+    """
     epochs = cfg["epochs"]
     warmup = cfg.get("warmup_epochs", 3) * steps_per_epoch
     total = epochs * steps_per_epoch
     final = cfg.get("final_lr_ratio", 0.01)
+    kind = cfg.get("scheduler", "cosine")
+    if kind not in ("cosine", "flat_cosine"):
+        raise ValueError(f"unknown scheduler: {kind!r} (expected 'cosine' or 'flat_cosine')")
+    flat_end = max(cfg.get("flat_epochs", 0) * steps_per_epoch, warmup) if kind == "flat_cosine" else warmup
 
     def fn(step: int) -> float:
         if step < warmup:
             return (step + 1) / max(warmup, 1)
-        p = (step - warmup) / max(total - warmup, 1)
-        return final + (1 - final) * 0.5 * (1 + math.cos(math.pi * p))
+        if step < flat_end:
+            return 1.0
+        p = (step - flat_end) / max(total - flat_end, 1)
+        return final + (1 - final) * 0.5 * (1 + math.cos(math.pi * min(p, 1.0)))
 
     return torch.optim.lr_scheduler.LambdaLR(optimizer, fn)
 
@@ -83,6 +104,10 @@ class Trainer:
         self.ckpt = CheckpointManager(out_dir, monitor=tc.get("monitor", "mAP50_95"),
                                       save_period=tc.get("save_period", 0))
         self.start_epoch = 1
+        # Turn mosaic off for the final epochs (YOLO close_mosaic=10; DEIM no_aug_epoch=8)
+        # so the model finishes on the real image distribution. HSV and flip stay on.
+        self.no_aug_epochs = tc.get("no_aug_epochs", 0)
+        self._mosaic_closed = False
 
     def train_one_epoch(self, epoch: int) -> dict:
         self.model.train()
@@ -114,11 +139,39 @@ class Trainer:
             pbar.set_postfix(loss=f"{float(total):.3f}", lr=f"{self.scheduler.get_last_lr()[0]:.2e}")
         return {k: v / max(nb, 1) for k, v in agg.items()}
 
+    def _close_mosaic(self, epoch: int) -> None:
+        """Disable mosaic and rebuild the loader.
+
+        Setting ``dataset.mosaic_prob`` alone is not enough: with persistent
+        workers -- and with Windows' spawn start method in general -- each worker
+        holds its own pickled copy of the dataset, so a change made in the main
+        process never reaches them. The loader is recreated with identical
+        settings so fresh workers pick up the change. Checked every epoch, so a
+        run resumed past the switch point also comes back with mosaic off.
+        """
+        old = self.train_loader
+        ds = old.dataset
+        if getattr(ds, "mosaic_prob", 0.0) == 0.0:
+            self._mosaic_closed = True
+            return
+        ds.mosaic_prob = 0.0
+        self.train_loader = DataLoader(
+            ds, batch_size=old.batch_size, shuffle=isinstance(old.sampler, RandomSampler),
+            num_workers=old.num_workers, collate_fn=old.collate_fn, pin_memory=old.pin_memory,
+            drop_last=old.drop_last, persistent_workers=old.num_workers > 0)
+        del old
+        self._mosaic_closed = True
+        self.recorder.logger.info(f"epoch {epoch}: mosaic closed for the final "
+                                  f"{self.no_aug_epochs} epochs")
+
     def fit(self) -> dict:
         self.recorder.logger.info(f"training for {self.epochs} epochs on {self.device}")
         best: dict = {}
         for epoch in range(self.start_epoch, self.epochs + 1):
             t0 = time.time()
+            if (self.no_aug_epochs and not self._mosaic_closed
+                    and epoch > self.epochs - self.no_aug_epochs):
+                self._close_mosaic(epoch)
             tr = self.train_one_epoch(epoch)
             row = {"epoch": epoch, **{f"train/{k}": _sig(v) for k, v in tr.items()},
                    "lr": self.scheduler.get_last_lr()[0]}

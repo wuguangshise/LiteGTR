@@ -104,27 +104,36 @@ def photometric_view(x: torch.Tensor, brightness: float = 0.4, contrast: float =
 
 
 @contextlib.contextmanager
-def preserved_bn_stats(*modules: nn.Module):
-    """Run a forward in train mode without letting it touch BatchNorm running stats.
+def bn_batch_stats_only(*modules: nn.Module):
+    """Run a train-mode forward that normalises with batch statistics but never
+    touches BatchNorm running statistics.
 
-    The teacher branch re-runs the neck on the perturbed batch. In train mode that
-    would fold the perturbed batch's statistics into the running mean/var used at
-    validation. Batch statistics are still used for normalisation during the
-    pass -- keeping it consistent with the student's -- but the buffers are
-    restored afterwards.
+    Why not snapshot-and-restore: the student's forward has already been
+    recorded by autograd, and BatchNorm's backward saves ``running_mean`` and
+    ``running_var``. ANY in-place write to them before ``backward()`` -- the
+    teacher pass updating them, or a ``copy_()`` putting the old values back --
+    bumps their version counter and backward fails with
+
+        one of the variables needed for gradient computation has been modified
+        by an inplace operation: [torch.cuda.FloatTensor [64]]
+
+    Restoring the values does not help; the write itself is the problem.
+
+    With ``track_running_stats`` switched off, ``nn.BatchNorm`` passes ``None``
+    for the running buffers, so the kernel uses batch statistics -- consistent
+    with the student's train-mode pass -- and performs no in-place update at all.
+    ``num_batches_tracked`` is left alone for the same reason.
     """
-    saved = []
+    toggled = []
     for m in modules:
         if m is None:
             continue
         for bn in m.modules():
             if isinstance(bn, nn.modules.batchnorm._BatchNorm) and bn.track_running_stats:
-                saved.append((bn, bn.running_mean.clone(), bn.running_var.clone(),
-                              bn.num_batches_tracked.clone()))
+                bn.track_running_stats = False
+                toggled.append(bn)
     try:
         yield
     finally:
-        for bn, rm, rv, nb in saved:
-            bn.running_mean.copy_(rm)
-            bn.running_var.copy_(rv)
-            bn.num_batches_tracked.copy_(nb)
+        for bn in toggled:
+            bn.track_running_stats = True

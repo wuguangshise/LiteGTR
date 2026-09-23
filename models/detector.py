@@ -28,7 +28,7 @@ from losses.token_consistency import TokenConsistencyLoss
 from models.backbone.builder import build_backbone
 from models.head.gfl_head import GFLHead
 from models.neck.pyramid_projection import LocalCNNPath, PyramidProjection
-from models.token.ema_token_router import EMATokenRouter, photometric_view, preserved_bn_stats
+from models.token.ema_token_router import EMATokenRouter, bn_batch_stats_only, photometric_view
 from models.token.geometric_writeback import MultiLevelWriteback
 from models.token.token_mixer import TokenMixer
 from models.token.token_selector import MultiLevelTokenSelector
@@ -127,13 +127,14 @@ class LiteGTR(nn.Module):
 
         For the photometric view this re-runs backbone, neck and local path on a
         perturbed copy of the batch -- one extra forward, no backward. BatchNorm
-        running stats are preserved so the perturbed batch never leaks into the
-        statistics used at validation.
+        normalises with batch statistics but never writes its running buffers,
+        so the perturbed batch cannot leak into validation statistics and no
+        tensor saved by the student's forward is modified before backward().
         """
         if self.ema_view == "same":
             return tok_in
         xp = photometric_view(images, **self.ema_view_cfg)
-        with preserved_bn_stats(self.backbone, self.neck, self.local_path):
+        with bn_batch_stats_only(self.backbone, self.neck, self.local_path):
             feats = self.neck(self.backbone(xp))
             if self.local_path is not None:
                 feats = self.local_path(feats)

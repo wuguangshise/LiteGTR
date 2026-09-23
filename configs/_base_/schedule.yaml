@@ -6,7 +6,13 @@ train:
   lr: 0.001
   weight_decay: 0.05
   warmup_epochs: 3
-  final_lr_ratio: 0.01
+  # FlatCosine (DEIM, CVPR 2025): hold the peak LR for about half the run, then
+  # cosine-decay. Helps most when training from scratch.
+  scheduler: flat_cosine    # flat_cosine | cosine
+  flat_epochs: 150
+  final_lr_ratio: 0.01      # decay floor; DEIM's 0.5 is for a ~58-epoch fine-tune
+  # Mosaic off for the final epochs (YOLO close_mosaic=10, DEIM no_aug_epoch=8)
+  no_aug_epochs: 15
   amp: true
   grad_clip: 10.0
   val_interval: 1
@@ -14,7 +20,7 @@ train:
   monitor: mAP50_95
   model_ema:              # weight EMA; distinct from the token-routing teacher
     enabled: true
-    decay: 0.9998
+    decay: 0.9999         # D-FINE (ICLR 2025) and Ultralytics YOLO both use 0.9999
     tau: 2000
 
 loss:
