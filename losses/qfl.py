@@ -25,5 +25,7 @@ class QualityFocalLoss(nn.Module):
         loss = F.binary_cross_entropy_with_logits(pred, target, reduction="none") * scale
         loss = loss.sum()
         if avg_factor is not None:
-            loss = loss / max(avg_factor, 1.0)
+            # a device tensor avoids a host sync; clamp keeps the same floor of 1
+            loss = loss / (avg_factor.clamp_min(1.0) if torch.is_tensor(avg_factor)
+                           else max(avg_factor, 1.0))
         return self.loss_weight * loss

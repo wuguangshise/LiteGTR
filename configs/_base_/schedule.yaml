@@ -15,7 +15,8 @@ train:
   no_aug_epochs: 15
   amp: true
   grad_clip: 10.0
-  val_interval: 1
+  val_interval: 5           # validation cannot change the weights, only best.pt granularity
+  val_dense_last: 30        # ...and every epoch over the final 30, where the best epoch lands
   save_period: 0          # >0 also writes epoch_xx.pt
   monitor: mAP50_95
   model_ema:              # weight EMA; distinct from the token-routing teacher

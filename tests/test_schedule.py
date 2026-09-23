@@ -69,3 +69,17 @@ def test_close_mosaic_rebuilds_the_loader_so_workers_see_the_change():
     assert ns.train_loader is not loader
     assert ns.train_loader.batch_size == 4 and ns.train_loader.drop_last is True
     assert all(float(b.max()) == 0.0 for b in ns.train_loader)
+
+
+def test_validation_is_sparse_early_and_dense_at_the_end():
+    ns = SimpleNamespace(epochs=300, cfg={"train": {"val_interval": 5, "val_dense_last": 30}})
+    val = [e for e in range(1, 301) if Trainer._should_validate(ns, e)]
+    assert val[:3] == [5, 10, 15]
+    assert all(e in val for e in range(271, 301)), "every epoch in the final 30"
+    assert 268 not in val and 270 in val
+    assert len(val) == 54 + 30                     # 5..270 step 5, then 271..300
+
+
+def test_validation_defaults_to_every_epoch():
+    ns = SimpleNamespace(epochs=10, cfg={"train": {}})
+    assert all(Trainer._should_validate(ns, e) for e in range(1, 11))

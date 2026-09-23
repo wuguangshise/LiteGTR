@@ -110,11 +110,33 @@ class Trainer:
         self._mosaic_closed = False
 
     def train_one_epoch(self, epoch: int) -> dict:
+        """One pass over the training set.
+
+        Per-step statistics are accumulated as detached GPU tensors and read back
+        only every ``log_every`` steps. ``float(tensor)`` forces the CPU to wait
+        for the GPU, so reading every loss term every step serialises the two
+        instead of letting the CPU queue the next step while the GPU runs this
+        one -- a real cost for a small model with many small kernels. The maths
+        is unchanged; only when the numbers are copied to the host differs.
+
+        Also returns ``_data_wait``: seconds spent blocked on the DataLoader. If
+        it is a large share of the epoch, the input pipeline is the bottleneck.
+        """
         self.model.train()
-        agg: dict[str, float] = {}
+        agg: dict[str, torch.Tensor] = {}
         nb = 0
+        log_every = self.cfg["train"].get("log_every", 20)
+        data_wait = 0.0
         pbar = tqdm(self.train_loader, desc=f"epoch {epoch}/{self.epochs}", leave=False)
-        for images, targets in pbar:
+        it = iter(pbar)
+        while True:
+            t_fetch = time.perf_counter()
+            try:
+                images, targets = next(it)
+            except StopIteration:
+                break
+            data_wait += time.perf_counter() - t_fetch
+
             images = images.to(self.device, non_blocking=True)
             with torch.autocast(device_type=self.device.type, enabled=self.amp):
                 losses = self.model.loss(images, targets)
@@ -124,7 +146,7 @@ class Trainer:
             if self.clip:
                 self.scaler.unscale_(self.optimizer)
                 gn = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
-                agg["grad_norm"] = agg.get("grad_norm", 0.0) + float(gn)
+                agg["grad_norm"] = agg.get("grad_norm", 0.0) + gn.detach()
             self.scaler.step(self.optimizer)
             self.scaler.update()
             self.scheduler.step()
@@ -133,11 +155,15 @@ class Trainer:
                 self.model_ema.update(self.model)
 
             for k, v in losses.items():
-                agg[k] = agg.get(k, 0.0) + float(v)
-            agg["loss"] = agg.get("loss", 0.0) + float(total)
+                agg[k] = agg.get(k, 0.0) + v.detach()
+            agg["loss"] = agg.get("loss", 0.0) + total.detach()
             nb += 1
-            pbar.set_postfix(loss=f"{float(total):.3f}", lr=f"{self.scheduler.get_last_lr()[0]:.2e}")
-        return {k: v / max(nb, 1) for k, v in agg.items()}
+            if nb % log_every == 0:        # the only per-step host sync
+                pbar.set_postfix(loss=f"{float(total):.3f}",
+                                 lr=f"{self.scheduler.get_last_lr()[0]:.2e}")
+        out = {k: float(v) / max(nb, 1) for k, v in agg.items()}
+        out["_data_wait"] = data_wait
+        return out
 
     def _close_mosaic(self, epoch: int) -> None:
         """Disable mosaic and rebuild the loader.
@@ -172,10 +198,14 @@ class Trainer:
                     and epoch > self.epochs - self.no_aug_epochs):
                 self._close_mosaic(epoch)
             tr = self.train_one_epoch(epoch)
+            data_wait = tr.pop("_data_wait", 0.0)
+            t_train = time.time() - t0
             row = {"epoch": epoch, **{f"train/{k}": _sig(v) for k, v in tr.items()},
                    "lr": self.scheduler.get_last_lr()[0]}
 
-            if epoch % self.cfg["train"].get("val_interval", 1) == 0 or epoch == self.epochs:
+            t_val0 = time.time()
+            t_tok = 0.0
+            if self._should_validate(epoch):
                 eval_model = self._eval_model()
                 # run artefacts (confusion matrix, PR curves, val_predictions) are
                 # written on the final epoch only -- they are slow and only the
@@ -190,7 +220,9 @@ class Trainer:
                         "per-condition mAP50:95 -> " +
                         ", ".join(f"{c}={m['mAP50_95']:.4f}(n={m['num_images']})"
                                   for c, m in by_cond.items()))
+                t_tok0 = time.time()
                 ts = collect_token_stats(eval_model, self.val_loader, self.device)
+                t_tok = time.time() - t_tok0
                 if ts:
                     self.recorder.log_tokens({"epoch": epoch, **ts})
                 self.ckpt.save(self.model, self.optimizer, self.scheduler,
@@ -200,7 +232,13 @@ class Trainer:
                 self.ckpt.save(self.model, self.optimizer, self.scheduler, epoch, {}, self.cfg,
                                model_ema=self.model_ema, scaler=self.scaler)
 
+            t_val = time.time() - t_val0
             row["time"] = round(time.time() - t0, 1)
+            # where the epoch went: data wait is time blocked on the DataLoader
+            row["time/data"] = round(data_wait, 1)
+            row["time/train"] = round(t_train - data_wait, 1)
+            row["time/val"] = round(t_val - t_tok, 1)
+            row["time/token_stats"] = round(t_tok, 1)
             self.recorder.log_epoch(row)
             self.recorder.logger.info(" | ".join(f"{k}={v}" for k, v in row.items()))
             self.recorder.plot_curves()
@@ -276,6 +314,20 @@ class Trainer:
         self.ckpt.best_metrics = {k.split("/", 1)[1]: float(v) for k, v in top.items()
                                   if k.startswith("val/") and v not in (None, "")}
         self.ckpt.best_metrics["epoch"] = int(float(top["epoch"]))
+
+    def _should_validate(self, epoch: int) -> bool:
+        """Every ``val_interval`` epochs, and EVERY epoch in the final
+        ``val_dense_last`` epochs.
+
+        Validation never touches the weights, so this cannot change the trained
+        model -- only how finely best.pt is chosen. With a flat-then-cosine
+        schedule the best epoch lands in the decay tail (and the mosaic-off
+        phase sits inside it), which is exactly where validation stays dense.
+        """
+        tc = self.cfg["train"]
+        interval = max(int(tc.get("val_interval", 1)), 1)
+        dense = int(tc.get("val_dense_last", 0))
+        return epoch % interval == 0 or epoch > self.epochs - dense or epoch == self.epochs
 
     def _eval_model(self):
         """Evaluate the EMA weights when weight-EMA is on, else the raw model."""

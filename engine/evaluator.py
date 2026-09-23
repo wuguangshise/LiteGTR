@@ -79,7 +79,7 @@ def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
 
 
 @torch.no_grad()
-def collect_token_stats(model, loader, device, max_batches: int = 20) -> dict:
+def collect_token_stats(model, loader, device, max_batches: int = 5) -> dict:
     """Routing diagnostics logged to ``token_stats.csv``.
 
     * ``score_entropy``  -- normalised entropy of each level's spatial score map.

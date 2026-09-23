@@ -9,6 +9,15 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+# OpenCV starts its own thread pool per process. Inside N DataLoader workers that
+# is N x (all cores) threads fighting for the CPU, which slows decoding and
+# augmentation instead of speeding it up. The DataLoader already parallelises
+# across samples, so OpenCV runs single-threaded in each worker -- the same
+# setting the YOLO codebases use. Module level, so every spawned worker (Windows)
+# applies it when it re-imports this file. No effect on the pixels produced.
+cv2.setNumThreads(0)
+cv2.ocl.setUseOpenCL(False)
+
 from datasets.transforms import (LetterBox, build_train_transforms, build_val_transforms,
                                  mosaic4)
 

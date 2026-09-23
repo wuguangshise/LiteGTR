@@ -74,13 +74,14 @@ class TaskAlignedAssigner(nn.Module):
         # Using the raw argmax over all GTs would be wrong: an unclaimed GT with a
         # higher IoU would steal the point, producing a positive the assigner never
         # selected. Dense UAV scenes hit this constantly.
-        overlap = mask.sum(1)
-        if (overlap > 1).any():
-            multi = overlap > 1
-            best = (ious * mask).argmax(1)
-            fix = torch.zeros_like(mask)
-            fix[torch.arange(num_pts, device=device), best] = True
-            mask = torch.where(multi[:, None], fix & mask, mask)
+        # Applied unconditionally: `if (overlap > 1).any()` forced a host sync on
+        # every image. torch.where leaves rows without a conflict untouched, so the
+        # result is identical.
+        multi = mask.sum(1) > 1
+        best = (ious * mask).argmax(1)
+        fix = torch.zeros_like(mask)
+        fix[torch.arange(num_pts, device=device), best] = True
+        mask = torch.where(multi[:, None], fix & mask, mask)
 
         fg = mask.any(1)
         assigned_gt = mask.float().argmax(1)

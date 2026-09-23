@@ -166,14 +166,17 @@ class LiteGTR(nn.Module):
         pos_boxes, pos_tgt_boxes, pos_reg, pos_points, pos_strides, pos_w = [], [], [], [], [], []
         num_pos = 0
         for i in range(b):
-            gt_boxes = targets[i]["boxes"].to(device)
-            gt_labels = targets[i]["labels"].to(device)
+            # targets are pinned by the DataLoader, so this copy can overlap compute
+            gt_boxes = targets[i]["boxes"].to(device, non_blocking=True)
+            gt_labels = targets[i]["labels"].to(device, non_blocking=True)
             res = self.assigner(cls[i].detach().sigmoid(), boxes[i].detach(), points,
                                 gt_boxes, gt_labels,
                                 point_strides=strides, reg_max=self.head.reg_max)
-            fg = res["fg_mask"]
-            if fg.any():
-                idx = fg.nonzero(as_tuple=True)[0]
+            # nonzero() has a data-dependent size, so it is the one host sync per image
+            # that cannot be avoided. Branching on its numel() -- already on the host --
+            # replaces the extra syncs that fg.any() and int(fg.sum()) used to add.
+            idx = res["fg_mask"].nonzero(as_tuple=True)[0]
+            if idx.numel():
                 lab = res["assigned_labels"][idx]
                 cls_targets[i, idx, lab] = res["assigned_ious"][idx]
                 g = res["assigned_gt"][idx]
@@ -183,9 +186,9 @@ class LiteGTR(nn.Module):
                 pos_points.append(points[idx])
                 pos_strides.append(strides[idx])
                 pos_w.append(res["assigned_ious"][idx])
-                num_pos += int(fg.sum())
+                num_pos += idx.numel()
 
-        avg = max(float(cls_targets.sum()), 1.0)
+        avg = cls_targets.sum().clamp_min(1.0)          # stays on device: no host sync
         losses = {"loss_qfl": self.qfl(cls.reshape(-1, self.num_classes),
                                        cls_targets.reshape(-1, self.num_classes), avg_factor=avg)}
 
@@ -196,7 +199,7 @@ class LiteGTR(nn.Module):
             pp = torch.cat(pos_points)
             ps = torch.cat(pos_strides)
             w = torch.cat(pos_w)
-            wsum = max(float(w.sum()), 1.0)
+            wsum = w.sum().clamp_min(1.0)
             losses["loss_giou"] = self.giou(pb, tb, weight=w, avg_factor=wsum)
 
             reg_max = self.head.reg_max

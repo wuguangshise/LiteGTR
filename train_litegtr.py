@@ -104,7 +104,8 @@ PROJECT = "runs/train"
 NAME = "litegtr_visdrone"
 SEED = 0
 AMP = True
-VAL_INTERVAL = 1         # 每 N 轮验证一次
+VAL_INTERVAL = 5         # 每 N 轮验证一次（验证不改变权重，只影响 best.pt 的挑选粒度）
+VAL_DENSE_LAST = 30      # 最后 N 轮每轮都验证：最佳轮次落在衰减末段，这里保持逐轮
 SAVE_PERIOD = 0          # >0 时额外保存 epoch_xx.pt
 RESUME = ""              # 续训：填 runs/train/<NAME>/weights/last.pt
                          # 其余参数（尤其 MODEL_CONFIG、EPOCHS）必须和原训练一致
@@ -229,7 +230,7 @@ def main():
         optimizer=OPTIMIZER, lr=LR0, weight_decay=WEIGHT_DECAY,
         scheduler=SCHEDULER, warmup_epochs=WARMUP_EPOCHS, flat_epochs=FLAT_EPOCHS,
         final_lr_ratio=FINAL_LR_RATIO, no_aug_epochs=NO_AUG_EPOCHS,
-        grad_clip=GRAD_CLIP, amp=AMP, val_interval=VAL_INTERVAL,
+        grad_clip=GRAD_CLIP, amp=AMP, val_interval=VAL_INTERVAL, val_dense_last=VAL_DENSE_LAST,
         save_period=SAVE_PERIOD,
     )
     cfg["train"].setdefault("model_ema", {})["decay"] = EMA_DECAY
