@@ -1,11 +1,24 @@
-# CSP (YOLOv8n-class) baseline under the IDENTICAL protocol: same neck, head,
-# losses, assigner, augmentation and schedule as LiteGTR-Main. Only the feature
-# extractor differs, and the token path is off. (docs/DESIGN.md P1-6)
+# CSP (C2f + SPPF, YOLOv8-style) baseline, PARAMETER-MATCHED to LiteGTR-Main.
+#
+# Same neck, head, losses, assigner, augmentation and schedule as the main model
+# -- only the feature extractor differs, and the token path is off
+# (docs/DESIGN.md P1-6).
+#
+# Backbone params: 2.07M vs TinyNeXt-M 2.03M (+2%). Neck and head are identical,
+# so total params match too. An earlier version used [32,64,128,256] = 0.92M,
+# less than half of TinyNeXt-M, which would have let any win be explained away
+# as "twice the parameters".
+#
+# FLOPs cannot be matched at the same time: at equal params this CSP costs
+# ~2.37G MACs vs TinyNeXt-M's ~3.60G (TinyNeXt spends more compute per parameter
+# on 7x7 depthwise + 4x expansion at high resolution). Params are matched, FLOPs
+# are reported -- the stricter comparison for LiteGTR, since the baseline gets
+# equal parameters AND less compute.
 _base_: [../models/model_main.yaml]
 model:
   backbone:
     type: csp
-    channels: [32, 64, 128, 256]
+    channels: [48, 96, 192, 384]
     depths: [1, 2, 2, 1]
   token:
     enabled: false

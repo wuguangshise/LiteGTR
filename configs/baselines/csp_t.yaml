@@ -1,9 +1,14 @@
-# Smaller CSP baseline, the comparison point for LiteGTR-Edge-S.
+# Smaller CSP baseline, PARAMETER-MATCHED to LiteGTR-Edge-S.
+#
+# Backbone params: 1.08M vs TinyNeXt-S 1.07M (+1%). Neck width (48) and head depth
+# (1 stacked conv) match model_edge_s.yaml, so total params match as well.
+# Same [1,2,2,1] depths as csp_n: the two CSP sizes differ only in width, the same
+# relationship as LiteGTR-Main vs Edge-S. An earlier version was 0.52M, about half.
 _base_: [csp_n.yaml]
 model:
   backbone:
-    channels: [24, 48, 96, 192]
-    depths: [1, 1, 2, 1]
+    channels: [40, 80, 160, 248]
+    depths: [1, 2, 2, 1]
   neck:
     channels: 48
   head:

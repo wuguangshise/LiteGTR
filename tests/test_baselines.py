@@ -57,3 +57,23 @@ def test_token_path_is_actually_disabled_in_baselines():
     model = build_model(cfg)
     assert model.use_token is False
     assert model.selector is None and model.writeback is None and model.ema_router is None
+
+
+@pytest.mark.parametrize("baseline,paired", [
+    ("configs/baselines/csp_n.yaml", "configs/models/model_main.yaml"),
+    ("configs/baselines/csp_t.yaml", "configs/models/model_edge_s.yaml"),
+])
+def test_baseline_is_parameter_matched(baseline, paired):
+    """A baseline with half the parameters makes any win meaningless -- the first
+    version of these configs was ~0.45x its paired model. Backbone params must
+    stay within 10%; neck and head are shared, so totals then match as well."""
+    def build(path):
+        cfg = load_config(path)
+        cfg["model"]["num_classes"] = 10
+        return build_model(cfg)
+
+    b, m = build(baseline), build(paired)
+    pb = sum(p.numel() for p in b.backbone.parameters())
+    pm = sum(p.numel() for p in m.backbone.parameters())
+    assert abs(pb - pm) / pm < 0.10, f"backbone {pb/1e6:.2f}M vs paired {pm/1e6:.2f}M"
+    assert b.neck.out_channels == m.neck.out_channels

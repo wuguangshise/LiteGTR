@@ -234,10 +234,26 @@ head, losses, assigner, augmentation and schedule unchanged
 the shared path — same head type, same `reg_max`, same assigner, same strides —
 so a baseline cannot silently drift out of the protocol.
 
+| config | backbone params | paired with | what it isolates |
+|---|---|---|---|
+| `baselines/csp_n.yaml` | 2.07M (`[48,96,192,384]`) | Main, TinyNeXt-M 2.03M | CSP vs TinyNeXt at equal params, token path off |
+| `baselines/csp_t.yaml` | 1.08M (`[40,80,160,248]`) | Edge-S, TinyNeXt-S 1.07M | the same comparison at the smaller scale |
+
+**Baselines are parameter-matched.** The first version of these configs used
+`[32,64,128,256]` (0.92M) and `[24,48,96,192]` (0.52M) -- roughly 0.45x the paired
+TinyNeXt backbones. Any LiteGTR win would then have been explainable as "twice
+the parameters". Neck and head are shared, so matching the backbone matches the
+total. `tests/test_baselines.py` fails if a baseline drifts beyond 10%.
+
+Params and FLOPs cannot be matched simultaneously: at equal parameters the CSP
+costs about 2.37G MACs to TinyNeXt-M's 3.60G, because TinyNeXt spends more compute
+per parameter (7x7 depthwise and 4x expansion at high resolution). Params are
+matched and FLOPs are reported. That is the *stricter* test for LiteGTR -- the
+baseline gets equal parameters and less compute -- so the FLOPs column has to be
+in the main table, not hidden.
+
 | config | what it isolates |
 |---|---|
-| `baselines/csp_n.yaml` | YOLOv8n-class extractor vs TinyNeXt, token path off |
-| `baselines/csp_t.yaml` | smaller CSP, the Edge-S comparison point |
 | `ablation/no_global_token.yaml` | TinyNeXt with the token path off: separates the backbone's gain from the token path's gain. One run serves both the baseline table and the ablation table. |
 
 ---
@@ -290,7 +306,7 @@ plus one design check. They are the only files in `configs/ablation/`.
 
 | group | config | question |
 |---|---|---|
-| Main vs baselines | `baselines/csp_n`, `baselines/csp_t` | accuracy at equal params/FLOPs, identical protocol |
+| Main vs baselines | `baselines/csp_n`, `baselines/csp_t` | accuracy at equal params (FLOPs reported), identical protocol |
 | Second scale point | `models/model_edge_s` | does the design hold at ~1M backbone params? |
 | Cross-illumination | #1 and #3 on `datasets/dronevehicle_rgb` | **does global context / photometric consistency matter more at night?** No new config -- same ablations, second dataset |
 | Seeds | `tools/run_seeds.py` | mean ± std over 3 seeds |
