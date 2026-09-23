@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from datasets.base import collate_fn  # noqa: E402
 from datasets.builder import build_dataset  # noqa: E402
 from engine.trainer import Trainer  # noqa: E402
-from models.build import build_model, load_config  # noqa: E402
+from models.build import build_model, count_deploy_params, load_config  # noqa: E402
 
 
 def set_seed(seed: int, deterministic: bool = False) -> None:
@@ -70,7 +70,7 @@ def main() -> None:
         trainer.resume(a.resume)
 
     n_train = sum(p.numel() for p in model.parameters())
-    n_deploy = sum(v.numel() for k, v in model.state_dict().items() if not k.startswith("ema_router."))
+    n_deploy = count_deploy_params(model)
     trainer.recorder.logger.info(
         f"model params: train={n_train/1e6:.2f}M deploy={n_deploy/1e6:.2f}M | "
         f"tokens={getattr(model.selector, 'num_tokens', 0)} | "

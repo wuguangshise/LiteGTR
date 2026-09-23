@@ -9,14 +9,14 @@ from utils.budget import PRESETS, backbone_macs, backbone_params
 
 torch = pytest.importorskip("torch")
 
-from models.build import build_model, load_config  # noqa: E402
+from models.build import build_model, count_deploy_params, load_config  # noqa: E402
 
 PARAM_LIMIT = 5.0e6
 BACKBONE_LIMIT = 2.5e6          # re-balanced TinyNeXt-M is 2.03M; the original was 3.76M
 
 
 def _deploy_params(model):
-    return sum(v.numel() for k, v in model.state_dict().items() if not k.startswith("ema_router."))
+    return count_deploy_params(model)
 
 
 def test_analytic_matches_locked_presets():
@@ -61,3 +61,12 @@ def test_ema_teacher_excluded_from_deploy_count():
     assert model.ema_router is not None
     total = sum(p.numel() for p in model.parameters())
     assert _deploy_params(model) < total, "EMA teacher must not count toward deployment params"
+
+
+def test_deploy_count_excludes_batchnorm_buffers():
+    """BN running stats are buffers, not parameters. Counting state_dict() made the
+    CSP baseline's 'deployment' count exceed its full training-parameter count."""
+    cfg = load_config("configs/baselines/csp_n.yaml")
+    cfg["model"]["num_classes"] = 10
+    model = build_model(cfg)
+    assert count_deploy_params(model) == sum(p.numel() for p in model.parameters())

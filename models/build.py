@@ -44,6 +44,17 @@ def active_token_count(token_cfg: dict) -> int:
     return sum(token_cfg["budget"][lv] for lv in token_cfg["levels"])
 
 
+def count_deploy_params(model) -> int:
+    """Learnable parameters that ship at inference -- the number for the paper.
+
+    Counts ``nn.Parameter``s only, excluding the training-only EMA teacher.
+    Summing ``state_dict()`` instead would also count BatchNorm running_mean /
+    running_var buffers, which are not parameters: for the BN-heavy CSP baseline
+    that made the "deployment" count exceed the full training-parameter count.
+    """
+    return sum(p.numel() for n, p in model.named_parameters() if not n.startswith("ema_router."))
+
+
 def build_model(cfg: dict):
     # imported lazily so load_config() works without torch installed
     from models.detector import LiteGTR

@@ -39,14 +39,27 @@ Two things the original plan could not have known without running this:
 
 ### Measured, full model (CI, `tools/profile_model.py`, thop, 640×640)
 
-| model | deploy params | MACs | FLOPs |
-|---|---|---|---|
-| **Main** | **2.33M** | **4.93G** | ~9.9G |
-| **Edge-S** | 1.22M | 2.49G | ~5.0G |
+Parameters are learnable parameters excluding the training-only EMA teacher
+(`models.build.count_deploy_params`); BatchNorm running stats are buffers and are
+not counted.
+
+| model | params | MACs | FLOPs | vs its paired baseline |
+|---|---|---|---|---|
+| `baselines/csp_n` | 2.25M | 3.57G | ~7.1G | -- |
+| **Main** | **2.32M** | **4.93G** | ~9.9G | params +3%, **MACs +38%** |
+| `baselines/csp_t` | 1.17M | 2.22G | ~4.4G | -- |
+| **Edge-S** | 1.22M | 2.49G | ~5.0G | params +4%, MACs +12% |
 
 Main's parameters by module: backbone 2.03M, head 74K, token selector 56K,
 write-back 50K, neck 47K, local path 34K, mixer 34K. The EMA teacher (56K) is
-training-only and excluded from deployment.
+training-only.
+
+**What the baseline comparison demands.** At matched parameters Main costs 38%
+more compute than csp_n (TinyNeXt's 7x7 depthwise and 4x expansion at high
+resolution are compute-heavy per parameter). The accuracy gain has to be large
+enough to justify that, and the FLOPs column must sit in the main table next to
+params -- not be left for a reviewer to compute. Edge-S's overhead is only 12%,
+which makes the small-scale comparison the easier one to win.
 
 thop does not count the attention matmuls (`q@k`, `attn@v`). They add roughly
 0.06G at 640 input -- about 5.0G MACs in total. State this in the paper next to

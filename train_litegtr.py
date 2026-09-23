@@ -211,7 +211,7 @@ def main():
     from datasets.base import collate_fn
     from datasets.visdrone import VisDroneDataset
     from engine.trainer import Trainer
-    from models.build import active_token_count, build_model, load_config
+    from models.build import active_token_count, build_model, count_deploy_params, load_config
 
     # 固定随机种子
     import random
@@ -275,8 +275,7 @@ def main():
     # --- 模型 ---
     model = build_model(cfg)
     n_train = sum(p.numel() for p in model.parameters())
-    n_deploy = sum(v.numel() for k, v in model.state_dict().items()
-                   if not k.startswith("ema_router."))
+    n_deploy = count_deploy_params(model)
     tk = cfg["model"]["token"]
     n_tok = active_token_count(tk)   # 只计生效层；合并后的 budget 可能带有未启用层的键
     out_dir = repo / PROJECT / NAME

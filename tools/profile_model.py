@@ -57,13 +57,13 @@ def group_params(model) -> dict[str, int]:
 
 def run_profile(cfg_paths: list[str], imgsz: int, out: str | None, batch: int) -> None:
     import torch
-    from models.build import build_model, load_config
+    from models.build import build_model, count_deploy_params, load_config
 
     cfg = load_config(*cfg_paths)
     model = build_model(cfg).eval()
 
     groups = group_params(model)
-    deploy = sum(v.numel() for k, v in model.state_dict().items() if not k.startswith("ema_router."))
+    deploy = count_deploy_params(model)
     total = sum(p.numel() for p in model.parameters())
 
     x = torch.randn(batch, 3, imgsz, imgsz)
