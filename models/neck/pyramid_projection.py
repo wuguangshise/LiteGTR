@@ -65,10 +65,15 @@ class LocalCNNPath(nn.Module):
     dominates the MAC budget (docs/DESIGN.md P0-2).
     """
 
-    def __init__(self, channels: int, num_levels: int, blocks_per_level: tuple[int, ...] | None = None):
+    def __init__(self, channels: int, num_levels: int, strides: tuple[int, ...] | None = None,
+                 blocks_per_level: tuple[int, ...] | None = None):
         super().__init__()
         if blocks_per_level is None:
-            blocks_per_level = (1,) + (2,) * (num_levels - 1)  # P2 gets a single block
+            # Only a stride-4 level gets the cheap single-block treatment. Keying this
+            # off position would silently starve P3 in the use_p2=False ablation, so
+            # the no_p2 run would differ from the main model by more than just P2.
+            strides = strides or tuple(4 * (2 ** i) for i in range(num_levels))
+            blocks_per_level = tuple(1 if s == 4 else 2 for s in strides[:num_levels])
         assert len(blocks_per_level) == num_levels
         self.paths = nn.ModuleList(
             [nn.Sequential(*[DWSepConv(channels, channels) for _ in range(n)]) for n in blocks_per_level]

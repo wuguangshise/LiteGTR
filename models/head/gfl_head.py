@@ -60,8 +60,10 @@ class GFLHead(nn.Module):
         # shared predictors across levels
         self.cls_pred = nn.Conv2d(feat_channels, num_classes, 1)
         self.reg_pred = nn.Conv2d(feat_channels, 4 * (reg_max + 1), 1)
-        # per-level learnable scale on the regression logits
-        self.scales = nn.Parameter(torch.ones(len(strides)))
+        # NOTE: no per-level scale here. A FCOS-style scale multiplies a *distance*;
+        # multiplying DFL *logits* instead just re-tempers the softmax, which is not
+        # the intended effect and makes the distribution harder to train. Each level
+        # already normalises by its own stride at decode time, so no scale is needed.
 
         prior = 0.01
         nn.init.constant_(self.cls_pred.bias, -math.log((1 - prior) / prior))
@@ -73,7 +75,7 @@ class GFLHead(nn.Module):
         cls_scores, bbox_preds = [], []
         for i, f in enumerate(feats):
             cls_scores.append(self.cls_pred(self.cls_stems[i](f)))
-            bbox_preds.append(self.reg_pred(self.reg_stems[i](f)) * self.scales[i])
+            bbox_preds.append(self.reg_pred(self.reg_stems[i](f)))
         return cls_scores, bbox_preds
 
     # ---- decoding helpers -------------------------------------------------

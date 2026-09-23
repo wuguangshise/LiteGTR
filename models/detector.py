@@ -50,7 +50,8 @@ class LiteGTR(nn.Module):
 
         dim = mc["neck"]["channels"]
         self.neck = PyramidProjection(self.backbone.out_channels, dim, use_fpn=mc["neck"].get("use_fpn", True))
-        self.local_path = LocalCNNPath(dim, len(self.levels)) if mc.get("use_local_cnn", True) else None
+        self.local_path = (LocalCNNPath(dim, len(self.levels), strides=self.strides)
+                           if mc.get("use_local_cnn", True) else None)
 
         tk = mc["token"]
         self.use_token = tk.get("enabled", True)
@@ -125,7 +126,9 @@ class LiteGTR(nn.Module):
         for i in range(b):
             gt_boxes = targets[i]["boxes"].to(device)
             gt_labels = targets[i]["labels"].to(device)
-            res = self.assigner(cls[i].detach().sigmoid(), boxes[i].detach(), points, gt_boxes, gt_labels)
+            res = self.assigner(cls[i].detach().sigmoid(), boxes[i].detach(), points,
+                                gt_boxes, gt_labels,
+                                point_strides=strides, reg_max=self.head.reg_max)
             fg = res["fg_mask"]
             if fg.any():
                 idx = fg.nonzero(as_tuple=True)[0]
