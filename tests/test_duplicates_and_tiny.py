@@ -92,6 +92,28 @@ def test_containment_keeps_two_separate_objects():
     assert len(postprocess(s, boxes, (640, 640), containment=0.8, agnostic=True)["boxes"]) == 2
 
 
+@pytest.mark.parametrize("agnostic,multi,max_det", [(False, True, 300), (True, False, 300), (False, True, 20)])
+def test_containment_on_a_prefix_matches_the_full_matrix(agnostic, multi, max_det):
+    """postprocess only builds the containment matrix over a score-sorted prefix; the
+    result must equal filtering every NMS survivor and truncating afterwards."""
+    from torchvision.ops import batched_nms
+
+    from models.detector import _not_contained
+
+    g = torch.Generator().manual_seed(0)
+    s = torch.rand(800, 10, generator=g) ** 6
+    xy = torch.rand(800, 2, generator=g) * 600
+    boxes = torch.cat([xy, xy + torch.rand(800, 2, generator=g) * 40 + 2], 1)
+    got = postprocess(s, boxes, (640, 640), 0.001, 0.7, max_det, 30000, agnostic, 0.8, multi)
+    ref = postprocess(s, boxes, (640, 640), 0.001, 0.7, 10 ** 9, 30000, agnostic, None, multi)
+    groups = torch.zeros_like(ref["labels"]) if agnostic else ref["labels"]
+    k = batched_nms(ref["boxes"], ref["scores"], groups, 0.7)   # already NMS'd: identity
+    k = k[_not_contained(ref["boxes"][k], groups[k], 0.8)][:max_det]
+    assert len(got["scores"]) == max_det
+    for key in ("boxes", "scores", "labels"):
+        assert torch.equal(got[key], ref[key][k])
+
+
 # ------------------------------------------------------------ diagnosis
 def test_box_types():
     gt_b = np.array([[10, 10, 30, 60], [100, 100, 120, 150]], np.float32)

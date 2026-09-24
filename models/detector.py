@@ -301,7 +301,17 @@ def postprocess(scores: torch.Tensor, boxes: torch.Tensor, hw: tuple[int, int],
     groups = torch.zeros_like(labels) if agnostic else labels
     k = batched_nms(bx, s_max, groups, nms_iou)          # sorted by score, descending
     if containment is not None and k.numel() > 1:
-        k = k[_not_contained(bx[k], groups[k], containment)]
+        # A box can only be removed by a higher-scoring one, so the first ``max_det``
+        # survivors depend only on a score-sorted prefix. Grow that prefix instead of
+        # building the N x N matrix over every NMS survivor: under multi-label at
+        # score 0.001 that is thousands of boxes per image -- minutes and GBs on CPU.
+        m = min(k.numel(), 2 * max_det)
+        while True:
+            keep = _not_contained(bx[k[:m]], groups[k[:m]], containment)
+            if int(keep.sum()) >= max_det or m == k.numel():
+                break
+            m = min(k.numel(), 2 * m)
+        k = k[:m][keep]
     k = k[:max_det]
     return {"boxes": bx[k], "scores": s_max[k], "labels": labels[k]}
 
