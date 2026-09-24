@@ -1,5 +1,13 @@
 # LiteGTR
 
+> [!WARNING]
+> **Work in progress.** This repository is in an early stage of construction and debugging
+> and still contains many undiscovered issues. It is being continuously revised and updated
+> with the help of Claude. Code, configurations and results may change without notice.
+>
+> **开发中。** 本仓库仍处于初期构建与调试阶段，存在许多尚未发现的问题。
+> 作者正在借助 Claude 持续修改和更新，代码、配置与结果可能随时变动，恕不另行通知。
+
 **Li**ghtweight **G**lobal-**T**oken **R**efinement for UAV object detection —
 a single-modality (RGB) detector for edge deployment.
 
