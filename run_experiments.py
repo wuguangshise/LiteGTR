@@ -4,6 +4,7 @@ LiteGTR 批量实验 —— 按顺序把论文需要的实验一次跑完
     python run_experiments.py              按下面 EXPERIMENTS 的顺序全部跑
     python run_experiments.py --dry-run    只列出每个实验的状态和将要执行的命令
     python run_experiments.py --only main abl_no_global_token   只跑指定的几个
+                                           （或改下面的 ONLY 常量，PyCharm 里直接点运行）
 
 每个实验都是单独调用一次 train_litegtr.py，只替换 MODEL_CONFIG / NAME / SEED，
 其余训练常量（轮数、学习率、batch、数据路径……）全部取自 train_litegtr.py。
@@ -54,6 +55,10 @@ EXPERIMENTS = [
     # ("main_seed1",                "configs/models/model_main.yaml",                   1, "完整模型 seed 1"),
     # ("main_seed2",                "configs/models/model_main.yaml",                   2, "完整模型 seed 2"),
 ]
+
+# 只跑其中几个（填 NAME）。在 PyCharm 里直接点运行时用它；命令行的 --only 优先。
+# 当前：先定标签分配 —— RFLA 主模型 vs STAL 消融。定下来后改成 [] 跑全部（已跑完的会跳过）
+ONLY = ["main", "abl_assigner_stal"]
 
 STOP_ON_ERROR = False     # True：某个实验出错就停下整批；False：记下来，接着跑下一个
 
@@ -151,6 +156,7 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="只列出状态和命令，不训练")
     ap.add_argument("--only", nargs="+", help="只跑这些 NAME")
     a = ap.parse_args()
+    a.only = a.only or ONLY or None
 
     names = [e[0] for e in EXPERIMENTS]
     if len(set(names)) != len(names):
@@ -161,7 +167,7 @@ def main() -> None:
     if a.only:
         unknown = set(a.only) - set(names)
         if unknown:
-            raise SystemExit(f"--only 里有不认识的 NAME: {sorted(unknown)}；可选: {names}")
+            raise SystemExit(f"--only / ONLY 里有不认识的 NAME: {sorted(unknown)}；可选: {names}")
 
     tc = train_constants()
     epochs, project = tc["epochs"], tc["project"]
