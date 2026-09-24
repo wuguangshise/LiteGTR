@@ -7,3 +7,7 @@ __pycache__/
 .idea/
 data/
 *.egg-info/
+
+# Paper drafts stay local -- never commit them
+docs/paper/
+*.docx
