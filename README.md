@@ -119,7 +119,11 @@ python tools/test.py --config configs/datasets/visdrone_rgb.yaml configs/models/
     --weights runs/train/<name>/weights/best.pt --split val --save-dir runs/vis/<name>
 ```
 
-**Small-object assignment.** `assigner.stal_size: 8` widens, for candidate selection
+**Small-object assignment.** The main model assigns labels with **RFLA** (ECCV'22,
+`assigner.mode: rfla`): every point is modelled by a Gaussian receptive field and
+matched to GTs by KL distance, so a box that contains no grid point still gets
+positives. The alternative, ablation `configs/ablation/assigner_stal.yaml`, is TAL
+with STAL: `assigner.stal_size: 8` widens, for candidate selection
 only, any GT side shorter than 8 px (STAL, Ultralytics YOLO26). Without it about 3 %
 of VisDrone val boxes at 640 input contain no anchor point and can never become
 positives -- almost all under 4 px, where a third of the boxes are affected.
@@ -228,7 +232,7 @@ configs/    _base_ / datasets / models / ablation / baselines   — every varian
 datasets/   base · builder · visdrone · dronevehicle · transforms · metrics · prepare/
 models/     backbone (tinynext + builder) · baselines/ · neck · token · head · detector · build
 losses/     qfl · giou · dfl · token_consistency · token_routing
-assigners/  task_aligned_assigner (with STAL)
+assigners/  rfla_assigner (main) · task_aligned_assigner (+ STAL, ablation)
 engine/     trainer · evaluator · ema · checkpoint · recorder
 tools/      profile_model · analyze_dataset · visualize_labels · train · val · test
             diagnose_predictions · run_seeds · export_onnx · benchmark_latency

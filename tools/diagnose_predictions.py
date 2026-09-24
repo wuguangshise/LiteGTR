@@ -188,6 +188,9 @@ def main() -> None:
         lines.append(f"    side {_bin_name(lo, hi):>9s}: {n:7d} GT ({100 * n / tot:5.1f}%)   "
                      f"uncovered {100 * miss_plain[k] / max(n, 1):5.1f}% | {100 * miss_stal[k] / max(n, 1):5.1f}%")
     lines.append(f"    total uncovered: {100 * miss_plain.sum() / tot:.1f}% | {100 * miss_stal.sum() / tot:.1f}% of all GT")
+    if cfg.get("assigner", {}).get("mode", "tal") == "rfla":
+        lines.append("    (this config assigns with RFLA: every GT gets positives by receptive-field "
+                     "distance, the columns above are the TAL rules it replaces)")
 
     rows = []
     if a.weights:

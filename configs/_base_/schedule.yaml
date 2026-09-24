@@ -58,11 +58,21 @@ vis:
   label: class            # none | class | class_score
 
 assigner:
+  # rfla: RFLA (ECCV'22) -- the main model. tal: task-aligned assigner (+ STAL when
+  # stal_size > 0) -- configs/ablation/assigner_stal.yaml. See assigners/.
+  mode: rfla
+  rfla:
+    topk: [3, 1]          # HLA: 3 positives per GT, then 1 more with receptive fields x ratio
+    ratio: 0.9
+    # receptive-field side (px) per stride -- RFLA's own P2 setting (ResNet-50-FPN TRF x 1/2).
+    # TinyNeXt's TRF would send every object < ~75 px to P2; see assigners/rfla_assigner.py.
+    rf_sizes: {4: 17.5, 8: 45.5, 16: 133.5, 32: 213.5}
+  # --- mode: tal only ---
   topk: 13
   alpha: 1.0
   beta: 6.0
   # STAL (Ultralytics YOLO26): for candidate selection a GT side shorter than this many
   # pixels is widened to it, so a box narrower than the P2 stride still has candidates.
   # Ultralytics uses stride[1] -- 8 px for a P2-P5 head. 0 = plain inside-the-box rule,
-  # under which ~10% of VisDrone boxes at 640 input are never positives.
+  # under which ~3% of VisDrone val boxes at 640 input are never positives.
   stal_size: 8

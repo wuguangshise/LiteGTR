@@ -46,10 +46,11 @@ def test_stal_leaves_gts_larger_than_its_size_untouched():
         assert torch.equal(a[k], b[k]), k
 
 
-def test_main_config_enables_stal():
-    from models.build import build_model
-    from tests._variants import variant_cfg
-    assert build_model(variant_cfg("main")).assigner.stal_size == 8
+def test_stal_ablation_enables_stal():
+    from models.build import build_model, load_config
+    cfg = load_config("configs/datasets/visdrone_rgb.yaml", "configs/ablation/assigner_stal.yaml")
+    cfg["model"]["num_classes"] = 10
+    assert build_model(cfg).assigner.stal_size == 8
 
 
 # ------------------------------------------------------------ post-processing

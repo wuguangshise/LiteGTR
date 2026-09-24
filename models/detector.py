@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.ops import batched_nms
 
-from assigners.task_aligned_assigner import TaskAlignedAssigner
+from assigners import build_assigner
 from losses.dfl import DistributionFocalLoss
 from losses.giou import GIoULoss, bbox_iou_aligned
 from losses.qfl import QualityFocalLoss
@@ -108,7 +108,7 @@ class LiteGTR(nn.Module):
             hard_ratio=lc.get("token_hard_ratio", 1.0),
             loss_weight=lc.get("token_weight", 0.5),
         )
-        self.assigner = TaskAlignedAssigner(**cfg.get("assigner", {}))
+        self.assigner = build_assigner(cfg.get("assigner", {}))
         self._last_student_maps: dict | None = None
         self._last_teacher_maps: dict | None = None
 
@@ -198,7 +198,9 @@ class LiteGTR(nn.Module):
                 pos_reg.append(reg[i][idx])
                 pos_points.append(points[idx])
                 pos_strides.append(strides[idx])
-                pos_w.append(res["assigned_ious"][idx])
+                # box-loss weight: TAL's normalised alignment, or GFL's max class
+                # score for RFLA (whose QFL target is the predicted box's IoU)
+                pos_w.append(res.get("reg_weights", res["assigned_ious"])[idx])
                 num_pos += idx.numel()
 
         avg = cls_targets.sum().clamp_min(1.0)          # stays on device: no host sync

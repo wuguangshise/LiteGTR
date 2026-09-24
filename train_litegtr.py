@@ -291,6 +291,11 @@ def main():
     print(f"模型配置  : {MODEL_CONFIG}")
     print(f"参数量    : 训练 {n_train / 1e6:.2f}M / 部署 {n_deploy / 1e6:.2f}M（EMA teacher 不计入）")
     print(f"特征层    : {model.levels}  strides={model.strides}")
+    asg = cfg.get("assigner", {})
+    if asg.get("mode", "tal") == "rfla":
+        print(f"标签分配  : RFLA  topk={asg.get('rfla', {}).get('topk', [3, 1])}")
+    else:
+        print(f"标签分配  : TAL  topk={asg.get('topk', 13)}  STAL={asg.get('stal_size', 0)}px")
     print(f"Token     : {n_tok} 个（{'启用' if n_tok else '禁用'}）  写回={tk.get('writeback_mode', '-')}")
     if n_tok:
         ema = tk.get("ema", {})

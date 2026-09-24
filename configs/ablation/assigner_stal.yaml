@@ -1,0 +1,6 @@
+# Label assignment: TAL + STAL (Ultralytics YOLO26) instead of the main model's RFLA
+# (ECCV'22). Everything else is the main model's, so main vs this isolates the assigner.
+# If this one wins, it becomes the main model's assigner (flip assigner.mode in
+# configs/_base_/schedule.yaml) and RFLA is dropped.
+_base_: [../models/model_main.yaml]
+assigner: {mode: tal}

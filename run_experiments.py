@@ -45,6 +45,7 @@ EXPERIMENTS = [
     ("abl_no_geometric_writeback",  "configs/ablation/no_geometric_writeback.yaml",     0, "③ 去掉几何先验"),
     ("abl_no_ema_routing",          "configs/ablation/no_ema_routing.yaml",             0, "④ 去掉 EMA 光照一致路由"),
     ("abl_no_routing_supervision",  "configs/ablation/no_routing_supervision.yaml",     0, "⑤ 去掉路由监督"),
+    ("abl_assigner_stal",           "configs/ablation/assigner_stal.yaml",              0, "⑥ 标签分配 RFLA -> TAL+STAL"),
     # --- 基线与第二个规模点
     ("base_csp_n",                  "configs/baselines/csp_n.yaml",                     0, "CSP 基线（对应 Main）"),
     ("edge_s",                      "configs/models/model_edge_s.yaml",                 0, "Edge-S 轻量版"),

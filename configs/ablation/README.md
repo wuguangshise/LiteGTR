@@ -1,6 +1,6 @@
 # 消融实验
 
-只保留论文真正需要的 5 个：四个主张各配一个消融来证明，再加一个设计验证。
+论文需要的 6 个：四个主张各配一个消融来证明，一个设计验证，外加一个标签分配的对比。
 每个都继承 `configs/models/model_main.yaml`，**相对主模型只改一个变量**。
 
 | # | 配置 | 改了什么 | 证明什么 |
@@ -10,6 +10,7 @@
 | 3 | `no_ema_routing.yaml` | 关掉 EMA 光照一致性约束 | **光照一致路由有效** |
 | 4 | `token_budget_256.yaml` | token 从 56 增加到 256 | **56 个是否足够** —— 最大的已知风险 |
 | 5 | `no_routing_supervision.yaml` | 去掉打分器的 GT 前景监督，打分器输出层恢复 weight decay | **路由监督有效** —— 没有它分数图会塌缩成平的，等于随机路由 |
+| 6 | `assigner_stal.yaml` | 标签分配从 RFLA（ECCV'22）换成 TAL + STAL（Ultralytics YOLO26） | **小目标标签分配的选择**。若 STAL 更好，主模型改用 STAL（把 `configs/_base_/schedule.yaml` 的 `assigner.mode` 改成 `tal`），RFLA 不再出现在论文里 |
 
 ## 论文里怎么呈现
 
@@ -34,6 +35,9 @@
 2. **`token_budget_256`**：若明显优于 56，**主模型本身要改**，越早知道越好
 3. **`no_geometric_writeback`**
 4. **`no_ema_routing`**
+6. **`assigner_stal`**：和主模型比较 AP_vt / AP_t / AP_small。2026-09-24 按当时代码训练的
+   `litegtr_visdrone`（TAL + STAL）在其他设置上与此配置一致，可先用 `tools/val.py`
+   按新评估口径重算作参考，正式结果仍以本配置重跑为准
 5. **`no_routing_supervision`**：需要重跑。第一次 200 轮训练（提交 `3abbba5`）虽然路由配置相同，
    但早于小目标分配修复（STAL，`assigner.stal_size`），和现在的主模型差了不止一个变量，
    不能当作这一行。它的 `token_stats.csv`（`score_entropy` 一路逼近 1.0）仍可作为
