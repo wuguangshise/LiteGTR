@@ -46,7 +46,6 @@ EXPERIMENTS = [
     ("abl_no_geometric_writeback",  "configs/ablation/no_geometric_writeback.yaml",     0, "③ 去掉几何先验"),
     ("abl_no_ema_routing",          "configs/ablation/no_ema_routing.yaml",             0, "④ 去掉 EMA 光照一致路由"),
     ("abl_no_routing_supervision",  "configs/ablation/no_routing_supervision.yaml",     0, "⑤ 去掉路由监督"),
-    ("abl_assigner_stal",           "configs/ablation/assigner_stal.yaml",              0, "⑥ 标签分配 RFLA -> TAL+STAL"),
     # --- 基线与第二个规模点
     ("base_csp_n",                  "configs/baselines/csp_n.yaml",                     0, "CSP 基线（对应 Main）"),
     ("edge_s",                      "configs/models/model_edge_s.yaml",                 0, "Edge-S 轻量版"),
@@ -57,8 +56,8 @@ EXPERIMENTS = [
 ]
 
 # 只跑其中几个（填 NAME）。在 PyCharm 里直接点运行时用它；命令行的 --only 优先。
-# 当前：先定标签分配 —— RFLA 主模型 vs STAL 消融。定下来后改成 [] 跑全部（已跑完的会跳过）
-ONLY = ["main", "abl_assigner_stal"]
+# [] = 按 EXPERIMENTS 的顺序全部跑（已跑完的会跳过，跑到一半的会续训）
+ONLY = []
 
 STOP_ON_ERROR = False     # True：某个实验出错就停下整批；False：记下来，接着跑下一个
 
