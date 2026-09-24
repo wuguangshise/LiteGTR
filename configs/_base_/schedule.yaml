@@ -1,6 +1,6 @@
 train:
   epochs: 200             # from scratch (P1-6). Changing this? Rescale the four values marked (*)
-  batch_size: 16
+  batch_size: 8           # same for every run: main, ablations, baselines
   val_batch_size: 16
   optimizer: adamw
   lr: 0.001

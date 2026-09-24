@@ -20,4 +20,4 @@ data:
   # border: 100              # only to override the auto-detected white margin
   # rebuild_cache: true      # force a re-parse after editing annotations
   img_size: 640
-  mosaic_prob: 0.5
+  mosaic_prob: 1.0        # every training image (Ultralytics YOLO default mosaic=1.0)

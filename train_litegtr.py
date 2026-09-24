@@ -71,7 +71,7 @@ MODEL_CONFIG = r"configs/models/model_main.yaml"
 
 # 训练参数
 EPOCHS = 200
-BATCH_SIZE = 16          # 显存不够就降：16 / 8 / 4
+BATCH_SIZE = 8           # 所有实验统一用 8（主模型、消融、基线必须一致）
 VAL_BATCH_SIZE = 16
 IMG_SIZE = 640
 DEVICE = "0"             # "0" / "cpu"
@@ -98,7 +98,7 @@ FINAL_LR_RATIO = 0.01      # 衰减终点 = LR0 * 该值
 EMA_DECAY = 0.9999
 
 # 数据增强
-MOSAIC_PROB = 0.5
+MOSAIC_PROB = 1.0        # 每张训练图都做 mosaic（Ultralytics YOLO 默认 mosaic=1.0）
 NO_AUG_EPOCHS = max(10, EPOCHS // 20)  # 最后约 5% 关 mosaic，至少 10 轮（YOLO close_mosaic=10）
 
 # Token 预算（None = 用模型配置里的值）

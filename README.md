@@ -68,6 +68,10 @@ python run_experiments.py                # run them all, in order
 > instead of the 4x4 stride-4 patchify (`backbone.stem`, docs/DESIGN.md P0-1b).
 > Checkpoints from before this change do not load into the current model, and
 > `run_experiments.py` reports their run directories as conflicts.
+>
+> The training recipe is batch 8 and mosaic probability 1.0 (Ultralytics' default),
+> in both `train_litegtr.py` and `configs/`. Every run in a comparison -- main,
+> ablations, baselines -- must use the same values.
 
 ## Evaluation protocol
 
