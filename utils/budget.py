@@ -20,10 +20,19 @@ def convnext_block_params(c: int) -> int:
     return dw + ln + pw1 + pw2 + gamma
 
 
-def backbone_params(channels: list[int], depths: list[int], in_ch: int = 3) -> dict:
+def stem_params(c0: int, in_ch: int = 3, stem: str = "conv") -> int:
+    if stem == "patchify":
+        return in_ch * c0 * 16 + c0 + 2 * c0                 # 4x4 s4 conv + LN
+    mid = c0 // 2
+    return (in_ch * mid * 9 + 2 * mid                        # 3x3 s2 conv (no bias) + BN
+            + mid * c0 * 9 + c0 + 2 * c0)                    # 3x3 s2 conv + LN
+
+
+def backbone_params(channels: list[int], depths: list[int], in_ch: int = 3,
+                    stem: str = "conv") -> dict:
     """Parameters of a TinyNeXt-style backbone, broken down per stage."""
     assert len(channels) == len(depths) == 4
-    stem = in_ch * channels[0] * 16 + channels[0] + 2 * channels[0]  # 4x4 s4 conv + LN
+    stem = stem_params(channels[0], in_ch, stem)
     total = stem
     per_stage, downsamples = [], []
     for i, (c, d) in enumerate(zip(channels, depths)):
@@ -46,9 +55,15 @@ def conv_macs(h: int, w: int, cin: int, cout: int, k: int = 1, groups: int = 1) 
     return h * w * (cin // groups) * cout * k * k
 
 
-def backbone_macs(channels: list[int], depths: list[int], img: int = 640) -> int:
+def backbone_macs(channels: list[int], depths: list[int], img: int = 640,
+                  stem: str = "conv") -> int:
     """MACs of the backbone at a given square input resolution."""
-    macs = conv_macs(img // 4, img // 4, 3, channels[0], 4)
+    if stem == "patchify":
+        macs = conv_macs(img // 4, img // 4, 3, channels[0], 4)
+    else:
+        mid = channels[0] // 2
+        macs = (conv_macs(img // 2, img // 2, 3, mid, 3)
+                + conv_macs(img // 4, img // 4, mid, channels[0], 3))
     for i, (c, d) in enumerate(zip(channels, depths)):
         s = 4 * (2 ** i)
         h = w = img // s

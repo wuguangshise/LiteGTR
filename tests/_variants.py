@@ -15,6 +15,7 @@ VARIANTS: dict[str, dict] = {
     "no_local_cnn": {"model": {"use_local_cnn": False}},
     "no_p2": {"model": {"use_p2": False}},
     "no_fpn": {"model": {"neck": {"use_fpn": False}}},
+    "patchify_stem": {"model": {"backbone": {"stem": "patchify"}}},
     "content_writeback": {"model": {"token": {"writeback_mode": "content"}}},
     "broadcast_writeback": {"model": {"token": {"writeback_mode": "broadcast"}}},
     "writeback_p2": {"model": {"token": {"writeback_levels": ["P2", "P3", "P4", "P5"]}}},

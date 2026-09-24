@@ -18,7 +18,8 @@ def build_backbone(cfg: dict, use_p2: bool) -> nn.Module:
         from models.backbone.tinynext import TinyNeXt
 
         return TinyNeXt(channels=tuple(cfg["channels"]), depths=tuple(cfg["depths"]),
-                        drop_path_rate=cfg.get("drop_path_rate", 0.0), **common)
+                        drop_path_rate=cfg.get("drop_path_rate", 0.0),
+                        stem=cfg.get("stem", "conv"), **common)
     if kind == "csp":
         from models.baselines.csp_baseline import CSPBackbone
 

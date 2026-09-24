@@ -63,6 +63,11 @@ python run_experiments.py                # run them all, in order
 > (`assigner.stal_size`, see below) are not comparable with current ones -- including
 > the first 200-epoch run, which therefore cannot serve as the `no_routing_supervision`
 > ablation (`configs/ablation/README.md`).
+>
+> The backbone stem changed too: TinyNeXt now uses two overlapping 3x3 stride-2 convs
+> instead of the 4x4 stride-4 patchify (`backbone.stem`, docs/DESIGN.md P0-1b).
+> Checkpoints from before this change do not load into the current model, and
+> `run_experiments.py` reports their run directories as conflicts.
 
 ## Evaluation protocol
 

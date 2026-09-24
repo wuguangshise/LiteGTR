@@ -5,6 +5,12 @@ Channel/depth presets are LOCKED from the analytic budget sweep (see
 in the original plan it consumed 2.16M of a 4.1-4.8M budget while contributing
 least to small-object AP.
 
+The stem is two overlapping 3x3 stride-2 convs rather than ConvNeXt's 4x4
+stride-4 patchify: a patchify stem compresses each non-overlapping 4x4 block of
+raw pixels into one vector, so a 4-8 px object is cut into one or two cells --
+possibly split across a patch border -- before any convolution has mixed
+neighbouring pixels. ``stem="patchify"`` keeps the original for comparison.
+
 Outputs strides 4/8/16/32 -> C2/C3/C4/C5.
 """
 from __future__ import annotations
@@ -71,6 +77,25 @@ class DropPath(nn.Module):
         return x * mask / keep
 
 
+def conv_stem(in_ch: int, out_ch: int) -> nn.Sequential:
+    """3x3 s2 -> BN -> GELU -> 3x3 s2 -> LN: stride 4, overlapping receptive fields.
+
+    The hidden width is half the output, as in the CSP baseline's stem. BN after the
+    first conv folds into it at export; the final LN matches the rest of the backbone.
+    """
+    mid = out_ch // 2
+    return nn.Sequential(
+        nn.Conv2d(in_ch, mid, 3, stride=2, padding=1, bias=False),
+        nn.BatchNorm2d(mid),
+        nn.GELU(),
+        nn.Conv2d(mid, out_ch, 3, stride=2, padding=1),
+        LayerNorm2d(out_ch),
+    )
+
+
+STEMS = ("conv", "patchify")
+
+
 class TinyNeXt(nn.Module):
     """Args mirror ``utils.budget.PRESETS`` so profile numbers stay comparable."""
 
@@ -81,9 +106,13 @@ class TinyNeXt(nn.Module):
         in_ch: int = 3,
         drop_path_rate: float = 0.0,
         out_indices: tuple[int, ...] = (0, 1, 2, 3),
+        stem: str = "conv",
     ):
         super().__init__()
         assert len(channels) == len(depths) == 4
+        if stem not in STEMS:
+            raise ValueError(f"unknown stem: {stem!r} (expected one of {STEMS})")
+        self.stem_type = stem
         self.channels = list(channels)
         self.out_indices = out_indices
         self.out_channels = [channels[i] for i in out_indices]
@@ -92,9 +121,12 @@ class TinyNeXt(nn.Module):
         total = sum(depths)
         dpr = [drop_path_rate * i / max(total - 1, 1) for i in range(total)]
 
-        self.stem = nn.Sequential(
-            nn.Conv2d(in_ch, channels[0], 4, stride=4), LayerNorm2d(channels[0])
-        )
+        if stem == "conv":
+            self.stem = conv_stem(in_ch, channels[0])
+        else:
+            self.stem = nn.Sequential(
+                nn.Conv2d(in_ch, channels[0], 4, stride=4), LayerNorm2d(channels[0])
+            )
         self.downsamples = nn.ModuleList()
         self.stages = nn.ModuleList()
         cur = 0

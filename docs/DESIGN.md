@@ -23,8 +23,11 @@ Run `python tools/profile_model.py --search` to reproduce.
 | backbone | params | MACs @640 | per-stage params (M) |
 |---|---|---|---|
 | `[32,64,128,256] × [4,4,9,4]` (original) | **3.76M** | **4.95G** | 0.04 / 0.15 / 1.25 / **2.16** |
-| `[32,64,128,192] × [2,4,8,2]` (**Main, locked**) | 2.03M | 3.60G | 0.02 / 0.15 / 1.11 / 0.61 |
-| `[24,48,96,160] × [2,3,6,2]` (**Edge-S, locked**) | 1.07M | 1.73G | 0.01 / 0.06 / 0.48 / 0.43 |
+| `[32,64,128,192] × [2,4,8,2]` (**Main, locked**) | 2.03M | 3.73G | 0.02 / 0.15 / 1.11 / 0.61 |
+| `[24,48,96,160] × [2,3,6,2]` (**Edge-S, locked**) | 1.07M | 1.80G | 0.01 / 0.06 / 0.48 / 0.43 |
+
+The locked rows include the overlapping conv stem (P0-1b); the original row is as
+measured at the time, with ConvNeXt's patchify stem.
 
 Two things the original plan could not have known without running this:
 
@@ -46,23 +49,23 @@ not counted.
 | model | params | MACs | FLOPs | vs its paired baseline |
 |---|---|---|---|---|
 | `baselines/csp_n` | 2.25M | 3.57G | ~7.1G | -- |
-| **Main** | **2.32M** | **4.93G** | ~9.9G | params +3%, **MACs +38%** |
+| **Main** | **2.32M** | **5.06G** | ~10.1G | params +3%, **MACs +42%** |
 | `baselines/csp_t` | 1.17M | 2.22G | ~4.4G | -- |
-| **Edge-S** | 1.22M | 2.49G | ~5.0G | params +4%, MACs +12% |
+| **Edge-S** | 1.22M | 2.57G | ~5.1G | params +5%, MACs +16% |
 
 Main's parameters by module: backbone 2.03M, head 74K, token selector 56K,
 write-back 50K, neck 47K, local path 34K, mixer 34K. The EMA teacher (56K) is
 training-only.
 
-**What the baseline comparison demands.** At matched parameters Main costs 38%
+**What the baseline comparison demands.** At matched parameters Main costs 42%
 more compute than csp_n (TinyNeXt's 7x7 depthwise and 4x expansion at high
 resolution are compute-heavy per parameter). The accuracy gain has to be large
 enough to justify that, and the FLOPs column must sit in the main table next to
-params -- not be left for a reviewer to compute. Edge-S's overhead is only 12%,
+params -- not be left for a reviewer to compute. Edge-S's overhead is only 16%,
 which makes the small-scale comparison the easier one to win.
 
 thop does not count the attention matmuls (`q@k`, `attn@v`). They add roughly
-0.06G at 640 input -- about 5.0G MACs in total. State this in the paper next to
+0.06G at 640 input -- about 5.1G MACs in total. State this in the paper next to
 the FLOPs column.
 
 **Correction.** An earlier version of this section concluded that ≈5G MACs was
@@ -88,6 +91,23 @@ only ~4%. An earlier target of "at most 60%" was never met by the locked model.
 If the global path proves worth scaling, the levers are more mixer layers and a
 token width decoupled from `neck.channels` -- widening the neck would mostly
 grow the CNN side, P2 in particular.
+
+### P0-1b Overlapping conv stem
+`models/backbone/tinynext.py`, `backbone.stem: conv`. ConvNeXt's 4x4 stride-4
+patchify stem compresses each non-overlapping 4x4 block of raw pixels into one
+vector: a 4-8 px object -- most of VisDrone at 640 input -- becomes one or two
+cells, possibly split across a patch border, before any convolution has mixed
+neighbouring pixels. The stem is now 3x3 s2 (3->C/2) -> BN -> GELU -> 3x3 s2
+(C/2->C) -> LN, as in the CSP baseline and most lightweight CNNs; strides and
+output widths are unchanged. Cost for Main: +3.5K params, +0.13G MACs (4.93G ->
+5.06G).
+
+It is adopted as the backbone's design, not run as a paper ablation. Its gain on
+tiny objects is expected, not measured: to check it, train
+`tests/_variants.py`'s `patchify_stem` override next to Main and compare AP_vt /
+AP_t / AP_S. Checkpoints trained with the patchify stem do not load into the
+new model (the stem weights differ in shape), so they fail loudly rather than
+evaluating with a random stem.
 
 ### P0-2 P2 is cheap by construction
 `models/head/gfl_head.py` gives P2 **one** depthwise-separable stem conv
@@ -365,7 +385,7 @@ the parameters". Neck and head are shared, so matching the backbone matches the
 total. `tests/test_baselines.py` fails if a baseline drifts beyond 10%.
 
 Params and FLOPs cannot be matched simultaneously: at equal parameters the CSP
-costs about 2.37G MACs to TinyNeXt-M's 3.60G, because TinyNeXt spends more compute
+costs about 2.37G MACs to TinyNeXt-M's 3.73G, because TinyNeXt spends more compute
 per parameter (7x7 depthwise and 4x expansion at high resolution). Params are
 matched and FLOPs are reported. That is the *stricter* test for LiteGTR -- the
 baseline gets equal parameters and less compute -- so the FLOPs column has to be

@@ -10,7 +10,7 @@
 # as "twice the parameters".
 #
 # FLOPs cannot be matched at the same time: at equal params this CSP costs
-# ~2.37G MACs vs TinyNeXt-M's ~3.60G (TinyNeXt spends more compute per parameter
+# ~2.37G MACs vs TinyNeXt-M's ~3.73G (TinyNeXt spends more compute per parameter
 # on 7x7 depthwise + 4x expansion at high resolution). Params are matched, FLOPs
 # are reported -- the stricter comparison for LiteGTR, since the baseline gets
 # equal parameters AND less compute.

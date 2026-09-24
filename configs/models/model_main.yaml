@@ -13,6 +13,10 @@ model:
     channels: [32, 64, 128, 192]
     depths: [2, 4, 8, 2]
     drop_path_rate: 0.1
+    # Two overlapping 3x3 stride-2 convs instead of ConvNeXt's 4x4 stride-4 patchify,
+    # which cuts a 4-8 px object into one or two cells before any conv mixes its
+    # pixels (models/backbone/tinynext.py). "patchify" = the original stem.
+    stem: conv
 
   neck:
     channels: 64
