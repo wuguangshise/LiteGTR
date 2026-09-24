@@ -1,9 +1,8 @@
 """Box format conversion and letterbox coordinate restoration.
 
-Predictions live in letterboxed ``img_size`` space. Internal evaluation keeps
-both GT and predictions in that space, so it is self-consistent -- but anything
-leaving the framework (VisDrone test-dev submission, visual comparison against
-the original image) must be mapped back to original-image pixels.
+Predictions live in letterboxed ``img_size`` space. Evaluation, the VisDrone
+test-dev submission and anything compared with published numbers map them back
+to original-image pixels, where COCO's size buckets are defined.
 """
 from __future__ import annotations
 
@@ -15,7 +14,7 @@ def letterbox_params(ori_hw: tuple[int, int], size: int) -> tuple[float, float, 
     h, w = ori_hw
     r = min(size / h, size / w)
     nh, nw = int(round(h * r)), int(round(w * r))
-    return r, (size - nw) / 2.0, (size - nh) / 2.0
+    return r, float((size - nw) // 2), float((size - nh) // 2)   # LetterBox pads with //
 
 
 def unletterbox(boxes: np.ndarray, ori_hw: tuple[int, int], size: int) -> np.ndarray:

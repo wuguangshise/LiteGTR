@@ -243,6 +243,7 @@ predictions at score >= 0.25). Zoomed in, two distinct things:
 | problem | literature | adopted |
 |---|---|---|
 | tiny GT gets no candidate | NWD (ISPRS'22): assignment is where NWD helps most -- IoU matching leaves 0.72 positives per tiny GT vs 1.05 with NWD. RFLA (ECCV'22): Gaussian receptive-field distance. **STAL** (Ultralytics YOLO26): widen tiny GTs for candidate selection only, regress the original box | **STAL**, `stal_size: 8` (Ultralytics' `stride[1]` for a P2-P5 head). Designed for exactly our assigner (TAL, ltrb/DFL head); GTs >= 8 px are assigned bit-identically. Replaces an ad-hoc nearest-point fallback tried first |
+| duplicate boxes (checked in RemDet's repo) | RemDet has no dedicated mechanism: YOLOv8 head, TAL (topk 10, alpha 0.5, beta 6), class-wise NMS 0.7, multi-label; figures are not filtered separately | nothing to adopt. Our drawings use a separate `vis:` filter (agnostic NMS + containment); TAL topk/alpha differ from ours (13 / 1.0) -- a candidate ablation, not changed without evidence |
 | evaluation post-processing | RemDet (AAAI'25, mmyolo) and Ultralytics val: score 0.001, **multi-label**, class-wise NMS **0.7**, 300 boxes; LEAF-YOLO: 0.01 / 0.5 | **same as RemDet / Ultralytics** (`test:` block). Our earlier 0.02 / single-label / 0.6 was stricter than every method in Table 1, understating our mAP |
 | drawn figures cluttered | every detector's predict mode filters at score 0.25-0.35; evaluation boxes are not meant to be drawn | figures filter at 0.25; `tools/diagnose_predictions.py` counts what the drawn boxes are |
 | duplicates at all | YOLOv10 (NeurIPS'24) / YOLO26: one-to-one head, NMS-free | **not adopted** -- see below |
@@ -306,10 +307,19 @@ argument for a *fixed* budget — deployment friendliness, not just FLOP savings
 `tools/benchmark_latency.py` measures a real device; MACs are not evidence.
 
 ### P1-9 VisDrone evaluation protocol (locked)
-Class 0 `ignored regions` are painted with the letterbox pad value
-(`ignore_mode: mask`); class 11 `others` is dropped; classes 1–10 map to 0–9.
-Metrics come from the **COCO API** on `val`. The official MATLAB toolkit gives
-slightly different numbers — pick one and never mix them across tables.
+Class 11 `others` is dropped; classes 1–10 map to 0–9. Class 0 `ignored regions`
+are painted with the letterbox pad value for training (`ignore_mode: mask`) but
+NOT for evaluation (`eval_ignore_mode: drop`).
+Metrics come from the **COCO API** on `val`, matched to mmdet/mmyolo's
+`CocoMetric` (RemDet, AAAI'25): boxes in original-image pixels against the original
+annotations, `maxDets` 100/300/1000 (AP at 1000), COCO size buckets in original
+pixels, plus AI-TOD's AP_vt / AP_t. An earlier version scored in letterboxed
+640-px space with pycocotools' default 100 detections per image and painted
+validation images: buckets shifted by the resize factor (a "small" object at
+640 is up to ~3x larger in the original), recall was capped on dense images, and
+ignored regions could never produce false positives. Those numbers are not
+comparable and are not reported. The official MATLAB toolkit gives slightly
+different numbers again — pick one and never mix them across tables.
 `test-dev` requires online submission and is not used for ablations.
 
 ### P1-10 DroneVehicle = cross-illumination robustness

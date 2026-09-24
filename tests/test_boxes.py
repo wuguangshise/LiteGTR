@@ -49,3 +49,15 @@ def test_size_buckets_follow_coco_thresholds():
 def test_xyxy_to_xywh():
     out = xyxy_to_xywh(np.array([[10.0, 20.0, 40.0, 60.0]]))
     assert np.allclose(out, [[10.0, 20.0, 30.0, 40.0]])
+
+
+def test_letterbox_params_match_the_transform_exactly():
+    """Odd padding: LetterBox pads with // -- evaluation must invert the same offset."""
+    from datasets.transforms import LetterBox
+
+    for ori_hw in [(765, 1360), (1500, 2000), (481, 640), (640, 427)]:
+        box = np.array([[37.0, 21.0, 90.0, 77.0]], dtype=np.float32)
+        img = np.zeros((*ori_hw, 3), np.uint8)
+        _, fwd = LetterBox(640)(img, box.copy())
+        back = unletterbox(fwd, ori_hw, 640)
+        assert np.allclose(back, box, atol=1e-3), (ori_hw, back)

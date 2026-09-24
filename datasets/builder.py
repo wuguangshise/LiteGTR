@@ -22,7 +22,10 @@ def build_dataset(cfg: dict, split: str, train: bool) -> DetectionDataset:
     if name == "visdrone":
         from datasets.visdrone import VisDroneDataset
 
-        return VisDroneDataset(ignore_mode=d.get("ignore_mode", "mask"), **common)
+        # Training may paint ignored regions out; evaluation uses the untouched image
+        # by default, as a COCO-json evaluation (RemDet, mmdet) does.
+        mode = d.get("ignore_mode", "mask") if train else d.get("eval_ignore_mode", "drop")
+        return VisDroneDataset(ignore_mode=mode, **common)
     if name == "dronevehicle":
         from datasets.dronevehicle import DroneVehicleDataset
 

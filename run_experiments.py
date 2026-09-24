@@ -56,7 +56,7 @@ EXPERIMENTS = [
 
 STOP_ON_ERROR = False     # True：某个实验出错就停下整批；False：记下来，接着跑下一个
 
-SUMMARY_KEYS = ["mAP50_95", "mAP50", "mAP75", "AP_small", "AP_medium", "AP_large"]
+SUMMARY_KEYS = ["mAP50_95", "mAP50", "mAP75", "AP_small", "AP_medium", "AP_large", "AP_vt", "AP_t"]
 
 
 # ======================== 实现 ========================

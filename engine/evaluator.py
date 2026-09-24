@@ -12,6 +12,7 @@ import torch
 from tqdm import tqdm
 
 from datasets.metrics import COCOMeanAP
+from utils.boxes import unletterbox
 from utils.plots import ConfusionMatrix, draw_predictions, plot_pr_curves
 
 
@@ -65,6 +66,23 @@ def display_filter(boxes: np.ndarray, scores: np.ndarray, labels: np.ndarray,
     return boxes[k], scores[k], labels[k]
 
 
+def to_original(meta: dict, input_hw: tuple[int, int], gt_boxes: np.ndarray,
+                gt_labels: np.ndarray, dt_boxes: np.ndarray):
+    """``(height, width, gt_boxes, gt_labels, dt_boxes)`` in original-image pixels.
+
+    Predictions go back through the letterbox; GT is the dataset's own annotation
+    before any resizing (``meta['ori_boxes']``), so boxes that shrink below a pixel
+    at the input size are still counted -- as they are in a COCO json. Samples
+    without that metadata (e.g. synthetic tests) stay in input space.
+    """
+    if "ori_shape" not in meta or "ori_boxes" not in meta:
+        return input_hw[0], input_hw[1], gt_boxes, gt_labels, dt_boxes
+    ori_hw = tuple(int(v) for v in meta["ori_shape"][:2])
+    assert input_hw[0] == input_hw[1], "letterbox input is square"
+    return (ori_hw[0], ori_hw[1], np.asarray(meta["ori_boxes"]).reshape(-1, 4),
+            np.asarray(meta["ori_labels"]).reshape(-1), unletterbox(dt_boxes, ori_hw, input_hw[0]))
+
+
 def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
              nms_iou: float = 0.6, max_det: int = 500, amp: bool = False,
              agnostic: bool = False, containment: float | None = None,
@@ -79,6 +97,9 @@ def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
     docs/DESIGN.md. ``vis`` (see :func:`vis_cfg`) filters what is drawn only.
     """
     vis = vis if vis is not None else vis_cfg({})
+    # Metrics are computed in ORIGINAL-image pixels against the original annotations
+    # (see to_original), like mmdet/mmyolo's CocoMetric; drawing and the confusion
+    # matrix stay in the letterboxed input the model saw.
     model.eval()
     metric = COCOMeanAP(classes)
     cm = ConfusionMatrix(len(classes)) if save_dir else None
@@ -100,10 +121,12 @@ def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
             dt_b = p["boxes"].float().cpu().numpy()
             dt_s = p["scores"].float().cpu().numpy()
             dt_l = p["labels"].cpu().numpy()
-            metric.add(image_id=img_id, height=h, width=w,
-                       condition=t.get("meta", {}).get("condition", "day"),
-                       gt_boxes=gt_b, gt_labels=gt_l,
-                       dt_boxes=dt_b, dt_scores=dt_s, dt_labels=dt_l)
+            meta = t.get("meta", {})
+            mh, mw, m_gt_b, m_gt_l, m_dt_b = to_original(meta, (h, w), gt_b, gt_l, dt_b)
+            metric.add(image_id=img_id, height=mh, width=mw,
+                       condition=meta.get("condition", "day"),
+                       gt_boxes=m_gt_b, gt_labels=m_gt_l,
+                       dt_boxes=m_dt_b, dt_scores=dt_s, dt_labels=dt_l)
             if cm is not None:
                 cm.update(dt_b, dt_s, dt_l, gt_b, gt_l)
             if vis_dir is not None and img_id < num_vis:

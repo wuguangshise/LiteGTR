@@ -58,6 +58,11 @@ class DetectionDataset(Dataset):
                 img, boxes = t(img, boxes)
         else:
             img, boxes, labels, meta = self.load_raw(index)
+            if not self.train:
+                # evaluation scores against the ORIGINAL annotations, in original
+                # pixels -- see engine/evaluator.py
+                meta = dict(meta or {}, ori_boxes=np.asarray(boxes, np.float32).reshape(-1, 4),
+                            ori_labels=np.asarray(labels, np.int64).reshape(-1))
             n_before = len(boxes)
             img, boxes = self.tf(img, boxes)
             if n_before and len(boxes):

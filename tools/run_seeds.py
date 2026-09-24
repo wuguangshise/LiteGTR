@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-KEYS = ["mAP50_95", "mAP50", "AP_small", "AP_medium", "AP_large"]
+KEYS = ["mAP50_95", "mAP50", "AP_small", "AP_medium", "AP_large", "AP_vt", "AP_t"]
 
 
 def main() -> None:

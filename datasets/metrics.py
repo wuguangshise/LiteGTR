@@ -11,13 +11,30 @@ import io
 import numpy as np
 
 
+KEYS = ("mAP50_95", "mAP50", "mAP75", "AP_small", "AP_medium", "AP_large", "AP_vt", "AP_t")
+
+# Up to 1000 detections per image count, as in mmdet/mmyolo's CocoMetric
+# (proposal_nums=(100, 300, 1000); COCO's AP uses the last) -- the protocol of
+# RemDet and the other VisDrone papers we compare with. pycocotools' default of
+# 100 silently drops correct detections on the many VisDrone images with more
+# than 100 objects.
+MAX_DETS = [100, 300, 1000]
+# COCO buckets (small < 32^2 <= medium < 96^2 <= large) plus AI-TOD's
+# very tiny (2-8 px) and tiny (8-16 px), all in ORIGINAL-image pixels.
+AREA_RNG = [[0, 1e10], [0, 32 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e10],
+            [2 ** 2, 8 ** 2], [8 ** 2, 16 ** 2]]
+AREA_LBL = ["all", "small", "medium", "large", "verytiny", "tiny"]
+
+
 class COCOMeanAP:
     """COCO-style AP via pycocotools, fed from in-memory predictions.
 
-    Also exposes AP-small / medium / large, which are the headline numbers for
-    UAV work, and supports evaluating a SUBSET of image ids so the evaluator can
-    report per-condition metrics (day / night / dark) without re-running
-    inference.
+    Boxes must be in ORIGINAL-image pixels (engine/evaluator.py maps them back
+    from the letterbox): COCO's size buckets are defined there, and that is where
+    every paper we compare with measures them. Reports AP-small / medium / large
+    plus AI-TOD's AP_vt / AP_t, and supports evaluating a SUBSET of image ids so
+    the evaluator can report per-condition metrics (day / night / dark) without
+    re-running inference.
     """
 
     def __init__(self, classes: list[str]):
@@ -54,8 +71,7 @@ class COCOMeanAP:
         img_ids = [i for i, m in self._images.items()
                    if conditions is None or m["condition"] in conditions]
         if not img_ids or not self._gt:
-            return {k: float("nan") for k in
-                    ("mAP50_95", "mAP50", "mAP75", "AP_small", "AP_medium", "AP_large", "num_images")}
+            return {k: float("nan") for k in (*KEYS, "num_images")}
 
         gt = {
             "images": [{"id": i, "height": self._images[i]["height"], "width": self._images[i]["width"]}
@@ -69,18 +85,29 @@ class COCOMeanAP:
             coco_gt.createIndex()
             dt = [d for d in self._dt if d["image_id"] in set(img_ids)]
             if not dt:
-                return {k: 0.0 for k in
-                        ("mAP50_95", "mAP50", "mAP75", "AP_small", "AP_medium", "AP_large")} | \
-                       {"num_images": len(img_ids)}
+                return {k: 0.0 for k in KEYS} | {"num_images": len(img_ids)}
             coco_dt = coco_gt.loadRes(dt)
             e = COCOeval(coco_gt, coco_dt, "bbox")
             e.params.imgIds = img_ids
+            e.params.maxDets = list(MAX_DETS)
+            e.params.areaRng = [list(r) for r in AREA_RNG]
+            e.params.areaRngLbl = list(AREA_LBL)
             e.evaluate(); e.accumulate(); e.summarize()
         self._last_eval = e
         s = e.stats
         return {"mAP50_95": float(s[0]), "mAP50": float(s[1]), "mAP75": float(s[2]),
                 "AP_small": float(s[3]), "AP_medium": float(s[4]), "AP_large": float(s[5]),
+                "AP_vt": self._ap(e, "verytiny"), "AP_t": self._ap(e, "tiny"),
                 "num_images": len(img_ids)}
+
+    @staticmethod
+    def _ap(e, area: str) -> float:
+        """AP@[.5:.95] for one extra area range at the largest maxDets -- what
+        ``summarize()`` reports for small/medium/large, for the AI-TOD ranges."""
+        a = e.params.areaRngLbl.index(area)
+        p = e.eval["precision"][:, :, :, a, -1]
+        p = p[p > -1]
+        return float(p.mean()) if p.size else -1.0
 
     def available_conditions(self) -> list[str]:
         return sorted({m["condition"] for m in self._images.values()})

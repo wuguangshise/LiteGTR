@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from datasets.base import collate_fn  # noqa: E402
 from datasets.metrics import COCOMeanAP  # noqa: E402
+from engine.evaluator import to_original  # noqa: E402
 from models.build import build_model, load_config  # noqa: E402
 from models.detector import postprocess  # noqa: E402
 from models.head.gfl_head import GFLHead  # noqa: E402
@@ -176,7 +177,8 @@ def main() -> None:
                 if len(s) > 3000:                   # top locations; multi-label draws from these
                     top = smax.topk(3000).indices
                     s, bx = s[top], bx[top]
-                cache.append((s.float().cpu(), bx.float().cpu(), gt_b.numpy(), gt_l.numpy()))
+                cache.append((s.float().cpu(), bx.float().cpu(), gt_b.numpy(), gt_l.numpy(),
+                              t.get("meta", {})))
 
     tot = max(cov_n.sum(), 1)
     lines = [f"split={a.split}  images={len(ds)}  input={size}px", "",
@@ -194,15 +196,17 @@ def main() -> None:
                   f"    {'variant':44s} {'mAP50:95':>8s} {'mAP50':>6s} {'AP_S':>6s} {'box/img':>7s} "
                   f"{'GT/img':>6s} {'correct':>7s} {'dup':>6s} {'wrongcls':>8s} {'loc':>6s} {'bg':>6s}"]
         n_img = len(cache)
-        n_gt = sum(len(c[2]) for c in cache)
+        n_gt = sum(len(c[2]) for c in cache)      # GT at input size, as drawn
         for name, thr, iou, multi, agn, cont in VARIANTS:
             metric = COCOMeanAP(ds.classes)
             types = {"correct": 0, "duplicate": 0, "wrong_class": 0, "localisation": 0, "background": 0}
             drawn = 0
-            for img_id, (s, bx, gt_b, gt_l) in enumerate(cache):
+            for img_id, (s, bx, gt_b, gt_l, meta) in enumerate(cache):
                 p = postprocess(s, bx, (h, w), thr, iou, 300, 30000, agn, cont, multi)
                 db, dsc, dl = p["boxes"].numpy(), p["scores"].numpy(), p["labels"].numpy()
-                metric.add(img_id, h, w, "day", gt_b, gt_l, db, dsc, dl)
+                # mAP in original pixels (as engine/evaluator.py); box types at input size
+                mh, mw, m_gb, m_gl, m_db = to_original(meta, (h, w), gt_b, gt_l, db)
+                metric.add(img_id, mh, mw, "day", m_gb, m_gl, m_db, dsc, dl)
                 drawn += int((dsc >= a.conf).sum())
                 for k2, v in box_types(db, dsc, dl, gt_b, gt_l, a.conf).items():
                     types[k2] += v
@@ -211,6 +215,7 @@ def main() -> None:
             row = {"variant": name, "score_thr": thr, "nms_iou": iou, "multi_label": multi,
                    "agnostic": agn, "containment": cont,
                    "mAP50_95": m["mAP50_95"], "mAP50": m["mAP50"], "AP_small": m["AP_small"],
+                   "AP_vt": m["AP_vt"], "AP_t": m["AP_t"],
                    "boxes_per_img": drawn / n_img, "gt_per_img": n_gt / n_img,
                    **{f"frac_{k2}": v / tt for k2, v in types.items()}}
             rows.append(row)

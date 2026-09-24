@@ -91,7 +91,20 @@ All evaluation -- validation during training, `tools/val.py`, `tools/test.py` an
 | `agnostic` | `false` | class-agnostic NMS costs ~1.3 mAP on VisDrone |
 | `containment` | `null` | e.g. `0.8` drops a box ≥ 80 % covered by a higher-scoring one |
 
-This is the protocol of RemDet (mmyolo) and Ultralytics YOLO val, so numbers are
+Scoring follows mmdet / mmyolo's `CocoMetric`, as used by RemDet (AAAI'25):
+
+| | |
+|---|---|
+| coordinates | predictions mapped back through the letterbox; GT = the original annotation, before resizing |
+| size buckets | COCO small < 32² ≤ medium < 96² ≤ large, in **original-image** pixels, plus AI-TOD's `AP_vt` (2–8 px) and `AP_t` (8–16 px) |
+| detections counted | up to **1000** per image (`maxDets` 100/300/1000), so every one of the 300 kept boxes counts |
+| VisDrone ignore regions | painted out for training (`ignore_mode: mask`); evaluation images untouched (`eval_ignore_mode: drop`), as in a COCO-json evaluation |
+
+Numbers from before this protocol (input-space buckets, 100 detections per image,
+painted evaluation images) are not comparable with current ones or with published
+results; re-evaluate old checkpoints with `tools/val.py`.
+
+This post-processing is the protocol of RemDet (mmyolo) and Ultralytics YOLO val, so numbers are
 comparable with theirs. It maximises recall for mAP and is **not** meant for drawing:
 multi-label output puts a *pedestrian* and a *people* box on the same person, and nested
 boxes on one tall object survive class-wise NMS.

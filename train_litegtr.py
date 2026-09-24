@@ -48,6 +48,9 @@ VAL_SPLIT = "VisDrone2019-DET-val"
 #   'mask' 涂成 padding 灰   'drop' 仅丢弃标注框
 # 跑基线对比时必须保持同一设置，否则不公平（docs/DESIGN.md P1-6 / P1-9）
 IGNORE_MODE = "mask"
+# 评估时的忽略区域处理。默认 'drop'：验证图不涂灰，与 RemDet / mmdet 的 COCO json 评估一致，
+# 结果才能和论文里的数字直接比较。改成 'mask' 则与旧版本的验证结果一致
+EVAL_IGNORE_MODE = "drop"
 
 # 模型配置（相对 REPO_ROOT）
 MODEL_CONFIG = r"configs/models/model_main.yaml"
@@ -264,7 +267,7 @@ def main():
     train_ds = VisDroneDataset(root=DATA_ROOT, split=TRAIN_SPLIT, img_size=IMG_SIZE,
                                train=True, mosaic_prob=MOSAIC_PROB, ignore_mode=IGNORE_MODE)
     val_ds = VisDroneDataset(root=DATA_ROOT, split=VAL_SPLIT, img_size=IMG_SIZE,
-                             train=False, mosaic_prob=0.0, ignore_mode=IGNORE_MODE)
+                             train=False, mosaic_prob=0.0, ignore_mode=EVAL_IGNORE_MODE)
     cfg["model"]["num_classes"] = len(train_ds.classes)
 
     pin = device.type == "cuda"
@@ -301,7 +304,7 @@ def main():
             print("  !! 配置里没有 score_gate —— 仓库代码是旧的，请先 git pull")
     print(f"数据集    : {DATA_ROOT}")
     print(f"            train {counts.get('train', 0)} 张 / val {counts.get('val', 0)} 张"
-          f"  忽略区域={IGNORE_MODE}")
+          f"  忽略区域: 训练={IGNORE_MODE} 评估={EVAL_IGNORE_MODE}")
     print(f"类别      : {len(train_ds.classes)} 类 {train_ds.classes}")
     print(f"训练      : {EPOCHS} epoch  batch {BATCH_SIZE}  imgsz {IMG_SIZE}  workers {WORKERS}")
     print(f"优化器    : {OPTIMIZER}  lr={LR0}  wd={WEIGHT_DECAY}  裁剪={GRAD_CLIP}")
@@ -321,7 +324,8 @@ def main():
     trainer = Trainer(model, train_loader, val_loader, cfg, device, out_dir, train_ds.classes)
     trainer.recorder.save_json("args.yaml", {
         "script": str(Path(__file__).resolve()), "seed": SEED, "device": str(device),
-        "data_root": DATA_ROOT, "ignore_mode": IGNORE_MODE, "resolved_config": cfg,
+        "data_root": DATA_ROOT, "ignore_mode": IGNORE_MODE,
+        "eval_ignore_mode": EVAL_IGNORE_MODE, "resolved_config": cfg,
     })
     if RESUME:
         # 恢复原始权重、EMA、优化器、调度器、best 指标；配置不一致会直接报错
