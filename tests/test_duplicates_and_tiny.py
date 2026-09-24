@@ -155,3 +155,28 @@ def test_cli_runs_end_to_end(tmp_path):
     text = (tmp_path / "d" / "diagnosis.txt").read_text(encoding="utf-8")
     assert "uncovered" in text and "STAL 8px" in text and "RemDet/Ultralytics" in text
     assert (tmp_path / "d" / "postprocess_sweep.csv").exists()
+
+
+# ------------------------------------------------------------ drawing
+def test_display_filter_draws_one_box_per_object():
+    from engine.evaluator import display_filter, vis_cfg
+    from models.build import load_config
+
+    vis = vis_cfg(load_config("configs/models/model_main.yaml"))
+    boxes = np.array([[10.0, 10, 30, 60],    # pedestrian on one person
+                      [11, 10, 31, 61],      # people on the same person (multi-label)
+                      [14, 12, 28, 40],      # nested, same person, lower score
+                      [100, 100, 120, 150],  # a second person
+                      [200, 200, 220, 250]])  # below the drawing threshold
+    scores = np.array([0.6, 0.4, 0.35, 0.5, 0.1])
+    labels = np.array([0, 1, 0, 0, 0])
+    b, s, l = display_filter(boxes, scores, labels, **vis)
+    assert s.tolist() == [0.6, 0.5] and l.tolist() == [0, 0]
+    assert len(display_filter(boxes[:0], scores[:0], labels[:0], **vis)[0]) == 0
+
+
+def test_vis_defaults_apply_to_configs_without_a_vis_block():
+    from engine.evaluator import vis_cfg
+
+    assert vis_cfg({}) == vis_cfg({"vis": {"score_thr": 0.3, "nms_iou": 0.6, "agnostic": True,
+                                           "containment": 0.8, "label": "class"}})

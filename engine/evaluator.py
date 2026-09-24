@@ -29,18 +29,56 @@ def postprocess_cfg(cfg: dict) -> dict:
             "pre_nms": t.get("pre_nms", 30000 if t.get("multi_label") else 3000)}
 
 
+def vis_cfg(cfg: dict) -> dict:
+    """``vis:`` block of a config -> keyword arguments for :func:`display_filter`.
+
+    Drawing only. Absent from a config means the same defaults, so checkpoints and
+    configs from before the block existed also draw one box per object.
+    """
+    v = cfg.get("vis", {}) or {}
+    return {"score_thr": v.get("score_thr", 0.3), "nms_iou": v.get("nms_iou", 0.6),
+            "agnostic": v.get("agnostic", True), "containment": v.get("containment", 0.8),
+            "label": v.get("label", "class")}
+
+
+def display_filter(boxes: np.ndarray, scores: np.ndarray, labels: np.ndarray,
+                   score_thr: float = 0.3, nms_iou: float = 0.6, agnostic: bool = True,
+                   containment: float | None = 0.8, **_) -> tuple[np.ndarray, ...]:
+    """Reduce evaluation detections to what a figure should show: a score threshold,
+    then NMS (class-agnostic by default: one box per person, not a pedestrian box
+    AND a people box) and containment. Metrics never see the result."""
+    from torchvision.ops import batched_nms
+
+    from models.detector import _not_contained
+
+    keep = scores >= score_thr
+    boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
+    if len(scores) < 2:
+        return boxes, scores, labels
+    b = torch.as_tensor(boxes, dtype=torch.float32)
+    s = torch.as_tensor(scores, dtype=torch.float32)
+    g = torch.zeros(len(s), dtype=torch.long) if agnostic else torch.as_tensor(labels).long()
+    k = batched_nms(b, s, g, nms_iou)                     # sorted by score, descending
+    if containment is not None and k.numel() > 1:
+        k = k[_not_contained(b[k], g[k], containment)]
+    k = k.numpy()
+    return boxes[k], scores[k], labels[k]
+
+
 def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
              nms_iou: float = 0.6, max_det: int = 500, amp: bool = False,
              agnostic: bool = False, containment: float | None = None,
              multi_label: bool = False, pre_nms: int = 3000,
              per_condition: bool = True, desc: str = "val",
-             save_dir: str | Path | None = None, num_vis: int = 16) -> tuple[dict, dict]:
+             save_dir: str | Path | None = None, num_vis: int = 16,
+             vis: dict | None = None) -> tuple[dict, dict]:
     """Returns ``(overall_metrics, per_condition_metrics)``.
 
     When ``save_dir`` is given, also writes ``confusion_matrix.png``,
     ``pr_curve.png`` and ``val_predictions/`` -- the run artefacts listed in
-    docs/DESIGN.md.
+    docs/DESIGN.md. ``vis`` (see :func:`vis_cfg`) filters what is drawn only.
     """
+    vis = vis if vis is not None else vis_cfg({})
     model.eval()
     metric = COCOMeanAP(classes)
     cm = ConfusionMatrix(len(classes)) if save_dir else None
@@ -73,9 +111,10 @@ def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
                 name = t.get("meta", {}).get("file_name", f"{img_id:06d}.jpg")
                 try:
                     import cv2
+                    vb, vs, vl = display_filter(dt_b, dt_s, dt_l, **vis)
                     cv2.imwrite(str(vis_dir / f"{img_id:04d}_{name}"),
-                                draw_predictions(img.astype(np.uint8), dt_b, dt_s, dt_l,
-                                                 gt_b, classes))
+                                draw_predictions(img.astype(np.uint8), vb, vs, vl, gt_b, classes,
+                                                 conf=0.0, label=vis["label"]))
                 except Exception:
                     pass
             img_id += 1

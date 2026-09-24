@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from engine.checkpoint import CheckpointManager
 from engine.ema import ModelEMA
-from engine.evaluator import collect_token_stats, evaluate, postprocess_cfg
+from engine.evaluator import collect_token_stats, evaluate, postprocess_cfg, vis_cfg
 from engine.recorder import Recorder
 
 
@@ -215,7 +215,7 @@ class Trainer:
                 save_dir = self.recorder.dir if epoch == self.epochs else None
                 overall, by_cond = evaluate(eval_model, self.val_loader, self.device,
                                             self.classes, amp=self.amp, save_dir=save_dir,
-                                            **postprocess_cfg(self.cfg))
+                                            vis=vis_cfg(self.cfg), **postprocess_cfg(self.cfg))
                 row.update({f"val/{k}": _sig(v) for k, v in overall.items()})
                 if by_cond:
                     self.recorder.log_conditions(epoch, by_cond)

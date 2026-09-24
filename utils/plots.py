@@ -107,8 +107,12 @@ def plot_pr_curves(per_class: dict[str, tuple[np.ndarray, np.ndarray]], path: st
 
 
 def draw_predictions(img_bgr: np.ndarray, dt_boxes, dt_scores, dt_labels,
-                     gt_boxes, classes: list[str], conf: float = 0.25) -> np.ndarray:
-    """GT in grey, predictions in colour -- for ``val_predictions/``."""
+                     gt_boxes, classes: list[str], conf: float = 0.25,
+                     label: str = "class_score") -> np.ndarray:
+    """GT in grey, predictions in colour -- for ``val_predictions/``.
+
+    ``label``: ``none`` (colour only), ``class`` or ``class_score``."""
+    assert label in ("none", "class", "class_score"), label
     import cv2
     out = img_bgr.copy()
     for b in np.asarray(gt_boxes).reshape(-1, 4).astype(int):
@@ -125,6 +129,8 @@ def draw_predictions(img_bgr: np.ndarray, dt_boxes, dt_scores, dt_labels,
         c = palette[int(l) % len(palette)]
         p1, p2 = (int(b[0]), int(b[1])), (int(b[2]), int(b[3]))
         cv2.rectangle(out, p1, p2, c, 1)
-        cv2.putText(out, f"{classes[int(l)]} {s:.2f}", (p1[0], max(p1[1] - 2, 8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, c, 1, cv2.LINE_AA)
+        if label != "none":
+            text = classes[int(l)] if label == "class" else f"{classes[int(l)]} {s:.2f}"
+            cv2.putText(out, text, (p1[0], max(p1[1] - 2, 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, c, 1, cv2.LINE_AA)
     return out

@@ -93,7 +93,18 @@ All evaluation -- validation during training, `tools/val.py`, `tools/test.py` an
 
 This is the protocol of RemDet (mmyolo) and Ultralytics YOLO val, so numbers are
 comparable with theirs. It maximises recall for mAP and is **not** meant for drawing:
-`val_predictions/` draws only boxes with score ≥ 0.25, like any detector's predict mode.
+multi-label output puts a *pedestrian* and a *people* box on the same person, and nested
+boxes on one tall object survive class-wise NMS.
+
+Drawings (`val_predictions/` at the end of training, `tools/val.py` / `tools/test.py
+--save-dir`) therefore pass through a separate `vis:` block -- score ≥ 0.3,
+class-agnostic NMS 0.6, containment 0.8, class names without scores -- so a figure
+shows one box per object. It never touches a metric. To redraw an existing checkpoint:
+
+```bash
+python tools/test.py --config configs/datasets/visdrone_rgb.yaml configs/models/model_main.yaml \
+    --weights runs/train/<name>/weights/best.pt --split val --save-dir runs/vis/<name>
+```
 
 **Small-object assignment.** `assigner.stal_size: 8` widens, for candidate selection
 only, any GT side shorter than 8 px (STAL, Ultralytics YOLO26). Without it about 3 %

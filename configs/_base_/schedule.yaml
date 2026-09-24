@@ -35,8 +35,8 @@ loss:
 # Post-processing for every evaluation (training-time val, tools/val.py, test.py, submit).
 # Defaults follow the protocol of the detectors we compare with -- RemDet (mmyolo) and
 # Ultralytics YOLO val: score 0.001, class-wise NMS at IoU 0.7, multi-label, 300 boxes.
-# This is an mAP protocol (maximise recall); it is NOT for drawing -- figures filter at
-# score >= 0.25 like every detector's predict mode, so a drawing from these boxes is busy.
+# This is an mAP protocol (maximise recall); it is NOT for drawing -- figures go through
+# the `vis:` block below.
 # Never needs retraining: tools/diagnose_predictions.py compares variants on a checkpoint.
 test:
   score_thr: 0.001
@@ -45,6 +45,17 @@ test:
   multi_label: true       # a location may output several classes (pedestrian AND people)
   agnostic: false         # true: one NMS across classes
   containment: null       # e.g. 0.8: drop a box >= 80% covered by a higher-scoring one
+
+# Drawing only (val_predictions/ from training, tools/val.py and tools/test.py --save-dir).
+# Applied on top of the `test:` boxes; never touches any metric. Multi-label output puts a
+# pedestrian box AND a people box on one person, and nested boxes on a tall object slip
+# under class-wise NMS -- fine for mAP, unreadable in a figure. One box per object here.
+vis:
+  score_thr: 0.3          # draw only boxes at or above this score
+  nms_iou: 0.6
+  agnostic: true          # one box per location whatever the class
+  containment: 0.8        # drop a box >= 80% inside a higher-scoring one
+  label: class            # none | class | class_score
 
 assigner:
   topk: 13
