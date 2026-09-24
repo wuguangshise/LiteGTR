@@ -12,21 +12,9 @@
 **Li**ghtweight **G**lobal-**T**oken **R**efinement for UAV object detection —
 a single-modality (RGB) detector for edge deployment.
 
-```
-RGB ─► TinyNeXt ─► C2..C5 ─► projection + FPN ─► local CNN path ─► P2..P5
-                                                                  │
-                             P2 ───────── local only ─────────────┤
-                                                                  │
-          P3/P4/P5 ─► local top-k selection (fixed budget, 56 tokens)
-                                   │  concat + (x, y) + level embedding
-                              Token Mixer (1 layer)
-                                   │
-          geometry-aware writeback, residual into P3/P4/P5 (gate γ, init 0)
-                                                                  │
-                                                           GFL head (QFL + DFL)
-
-training only:  GT-centre heat maps ─► score maps ◄─ EMA scorer on a photometric view
-```
+<p align="center">
+  <img src="docs/figures/architecture.webp" alt="LiteGTR architecture" width="100%"/>
+</p>
 
 * **Local top-k routing** — each score map is cut into windows and a fixed number of
   tokens is taken from every window, so the graph has static shapes (ONNX / TensorRT).
