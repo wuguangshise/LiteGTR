@@ -1,12 +1,16 @@
 """
-依次训练两个候选模型 —— 直接运行即可（PyCharm 里点运行）
+依次训练两个候选模型和 main 基准 —— 直接运行即可（PyCharm 里点运行）
 
-    python train_candidates.py             按顺序训练：先第一个，跑完再第二个
+    python train_candidates.py             按顺序训练：跑完一个再开始下一个
     python train_candidates.py --dry-run   只看每个候选的状态和将要执行的命令
 
-默认训练：
-    cand_writeback_p2      configs/ablation/writeback_p2.yaml     token 全局信息写回 P2
-    cand_detail_enhance    configs/ablation/detail_enhance.yaml   打分图引导的 P2 细节增强
+默认按顺序训练：
+    1. cand_writeback_p2      configs/ablation/writeback_p2.yaml     token 全局信息写回 P2
+    2. cand_detail_enhance    configs/ablation/detail_enhance.yaml   打分图引导的 P2 细节增强
+    3. main                   configs/models/model_main.yaml         基准：用当前损失（CIoU + NWD）重训
+
+main 和 run_experiments.py 用同一个输出目录 runs/train/main/，两边训练的是同一个实验。
+旧损失（GIoU）训练出来的 runs/train/main/ 会被报 conflict、不会被续训：先把它改名或移走。
 
 一次只训练一个，显存和 CPU 占用和单独训练完全一样。
 
@@ -37,6 +41,7 @@ except Exception:
 CANDIDATES = [
     ("cand_writeback_p2",   "configs/ablation/writeback_p2.yaml",   0, "token 全局信息写回 P2"),
     ("cand_detail_enhance", "configs/ablation/detail_enhance.yaml", 0, "打分图引导的 P2 细节增强"),
+    ("main",                "configs/models/model_main.yaml",       0, "基准：用当前损失（CIoU + NWD）重训"),
 ]
 # ===========================================================
 

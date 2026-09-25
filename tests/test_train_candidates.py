@@ -11,10 +11,20 @@ import train_litegtr as T  # noqa: E402
 from models.build import load_config  # noqa: E402
 
 
-def test_two_candidates_with_distinct_output_dirs():
+def test_candidates_then_main_in_order():
     names = [c[0] for c in C.CANDIDATES]
-    assert len(names) == 2 and len(set(names)) == 2
-    assert not {"main", T.NAME} & set(names)
+    assert names == ["cand_writeback_p2", "cand_detail_enhance", "main"]
+    assert T.NAME not in names
+
+
+def test_main_entry_is_the_experiment_batch_main():
+    """Same NAME and config as run_experiments.py's main, so both scripts train -- and
+    skip or resume -- the same run directory."""
+    import run_experiments as R
+
+    batch = {n: (cfg, seed) for n, cfg, seed, _ in R.EXPERIMENTS}
+    mine = {n: (cfg, seed) for n, cfg, seed, _ in C.CANDIDATES}
+    assert mine["main"] == batch["main"]
 
 
 def test_candidate_configs_are_what_they_claim():
