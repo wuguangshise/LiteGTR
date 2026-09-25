@@ -1,0 +1,7 @@
+# Candidate main model: select tokens on the coarse levels (P3-P5, cheap), write
+# them back into P2 as well (where 2-8 px objects are detected). Without this P2
+# never sees the token path: the writeback runs after the FPN and P2 goes straight
+# to the head. Selecting on P2 stays off -- that is the expensive part (P0-2).
+# Cost at 640: +16K params, ~+0.4G MACs (tools/check_writeback_p2.py).
+_base_: [../models/model_main.yaml]
+model: {token: {writeback_levels: [P2, P3, P4, P5]}}
