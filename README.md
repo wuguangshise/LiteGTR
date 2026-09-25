@@ -27,6 +27,105 @@ a single-modality (RGB) detector for edge deployment.
 
 Design rationale, locked decisions and measured budgets: **[docs/DESIGN.md](docs/DESIGN.md)**.
 
+## Results
+
+> **Status.** These tables are the paper's tables and the repository's final results.
+> Rows marked **TBD** are filled in once the experiments are complete; every number
+> below that is not TBD is copied from the source cited in its footnote.
+> 表格即论文数据；标 **TBD** 的在全部实验完成后补齐，其余数字均摘自脚注所列的原始来源。
+
+### Table 1 — VisDrone2019-DET val (main comparison)
+
+640 × 640 input. AP is COCO AP@[.5:.95]; AP<sub>S</sub> uses COCO's small bucket (< 32²)
+in original-image pixels; AP<sub>vt</sub> (2–8 px) and AP<sub>t</sub> (8–16 px) follow AI-TOD.
+Protocol: see [Evaluation protocol](#evaluation-protocol).
+
+| Method | Venue | Params (M) | GFLOPs | Latency (ms) | AP | AP<sub>50</sub> | AP<sub>75</sub> | AP<sub>S</sub> | AP<sub>vt</sub> | AP<sub>t</sub> |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| *Trained and evaluated under our protocol*<sup>a</sup> | | | | | | | | | | |
+| YOLOv8n | Ultralytics | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| YOLO11n | Ultralytics | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| RemDet-Tiny | AAAI'25 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| DEIM-N<sup>b</sup> | CVPR'25 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| **LiteGTR-Edge-S (ours)** | — | 1.22<sup>c</sup> | 5.1<sup>c</sup> | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| **LiteGTR (ours)** | — | 2.32<sup>c</sup> | 10.1<sup>c</sup> | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| *Reported by the original authors*<sup>d</sup> | | | | | | | | | | |
+| RemDet-Tiny [1] | AAAI'25 | 3.2 | 4.6 | — | 21.8 | 37.1 | 21.9 | 12.7 | — | — |
+| RemDet-S [1] | AAAI'25 | 11.9 | 16.0 | — | 24.7 | 41.5 | 25.0 | 15.4 | — | — |
+| RemDet-M [1] | AAAI'25 | 23.3 | 34.4 | — | 27.3 | 44.7 | 28.2 | 17.3 | — | — |
+| UAV-DETR-EV2 [2] | arXiv'25 | 12.1 | 33.3 | — | 28.2 | 46.7 | — | — | — | — |
+| UAV-DETR-R18 [2] | arXiv'25 | 20.5 | 64.3 | — | 29.8 | 48.8 | — | — | — | — |
+
+<sup>a</sup> Same data, 640 input and evaluation code (predictions are scored by this
+repository's evaluator). Batch 8. YOLO and RemDet are trained from scratch for 200
+epochs, like LiteGTR. Params and GFLOPs are measured by us at 640 with VisDrone's 10
+classes; latency is TensorRT FP16, batch 1, on one GPU (to be named).
+<sup>b</sup> DEIM is trained with its official recipe and ImageNet-pretrained HGNetv2
+backbone; DETR-style models train poorly from scratch. LiteGTR uses no pretraining.
+<sup>c</sup> Measured (`tools/profile_model.py`, 640, GFLOPs = 2 × MACs; the attention
+products add ≈ 0.1 GFLOPs). Current configuration; updated if the final model changes.
+<sup>d</sup> Copied from the authors' repositories, not re-run: RemDet [1] reports FLOPs
+as given in its README; UAV-DETR [2] reports AP and AP<sub>50</sub> only. "—" = not reported.
+
+### Table 2 — AI-TOD-v2 test (generalisation to tiny objects)
+
+Mean object size ≈ 12.7 px. Only the key metrics are listed.
+
+| Method | Backbone | AP | AP<sub>50</sub> | AP<sub>vt</sub> | AP<sub>t</sub> |
+|---|---|---:|---:|---:|---:|
+| *Trained and evaluated under our protocol*<sup>a</sup> | | | | | |
+| YOLOv8n | CSP (n) | TBD | TBD | TBD | TBD |
+| YOLO11n | CSP (n) | TBD | TBD | TBD | TBD |
+| RemDet-Tiny | RemDet | TBD | TBD | TBD | TBD |
+| DEIM-N | HGNetv2-B0 | TBD | TBD | TBD | TBD |
+| **LiteGTR (ours)** | TinyNeXt-M | TBD | TBD | TBD | TBD |
+| *Reported by the original authors*<sup>e</sup> | | | | | |
+| Faster R-CNN w/ RFLA [3] | R-50 | 22.6 | 54.8 | 8.6 | 21.7 |
+| DetectoRS w/ RFLA [3] | R-50 | 25.7 | 58.9 | 9.2 | 25.5 |
+| NWD-RKA [4] | R-50 | 23.4 | 53.5 | 8.7 | 23.8 |
+| DINO-DETR [4] | R-50 | 25.9 | 61.3 | 12.7 | 25.3 |
+| DQ-DETR [4] | R-50 | 30.5 | 69.2 | 15.2 | 30.9 |
+| SET [5] | — | *to verify* | *to verify* | *to verify* | *to verify* |
+
+<sup>e</sup> Trained on AI-TOD-v2 trainval, tested on AI-TOD-v2 test: RFLA 12 epochs [3];
+NWD-RKA, DINO-DETR and DQ-DETR 36 epochs as tabulated in [4]. These detectors use
+R-50 backbones, roughly 10–20× LiteGTR's parameters. SET's AI-TOD-v2 numbers are to be
+copied from its paper [5] once verified.
+
+### Table 3 — Where to sharpen: routed detail restoration (core ablation)
+
+Final model with each P2 variant; configs in `configs/ablation/`.
+
+| Detail enhancement on P2 | Global context into P2 | Config | VisDrone AP | VisDrone AP<sub>vt</sub> | VisDrone AP<sub>t</sub> | AI-TOD-v2 AP | AI-TOD-v2 AP<sub>vt</sub> |
+|---|:---:|---|---:|---:|---:|---:|---:|
+| none | | `model_main` | TBD | TBD | TBD | TBD | TBD |
+| everywhere (no routing) | | `detail_enhance_global` | TBD | TBD | TBD | TBD | TBD |
+| at the 56 tokens (hard mask) | | `detail_enhance_token` | TBD | TBD | TBD | — | — |
+| **routed (score-map soft mask)** | | `detail_enhance` | TBD | TBD | TBD | TBD | TBD |
+| none | ✓ | `writeback_p2` | TBD | TBD | TBD | — | — |
+| **routed (score-map soft mask)** | ✓ | `writeback_p2_detail_enhance` | TBD | TBD | TBD | — | — |
+
+Key rows are the mean ± std of 3 seeds (TBD); "—" = not run on that dataset.
+
+### Table 4 — The routing signal (component ablation, VisDrone val)
+
+Each row removes one component from the final model.
+
+| Variant | Config | AP | AP<sub>S</sub> | AP<sub>vt</sub> |
+|---|---|---:|---:|---:|
+| Final model | — | TBD | TBD | TBD |
+| − routing supervision (GT-centre heatmap) | `no_routing_supervision` | TBD | TBD | TBD |
+| − illumination-consistent EMA routing | `no_ema_routing` | TBD | TBD | TBD |
+| − global token path (scorer and enhancement kept) | TBD | TBD | TBD | TBD |
+| − geometric prior in the writeback | `no_geometric_writeback` | TBD | TBD | TBD |
+
+**Sources.**
+[1] RemDet, AAAI'25 — [HZAI-ZJNU/RemDet](https://github.com/HZAI-ZJNU/RemDet) README, VisDrone table.
+[2] UAV-DETR — [ValiantDiligent/UAV-DETR](https://github.com/ValiantDiligent/UAV-DETR) README, VisDrone table.
+[3] RFLA, ECCV'22 — [Chasel-Tsui/mmdet-rfla](https://github.com/Chasel-Tsui/mmdet-rfla) README, Table 2 (AI-TOD-v2).
+[4] DQ-DETR, ECCV'24 — [hoiliu-0801/DQ-DETR](https://github.com/hoiliu-0801/DQ-DETR) README, Table 1 (AI-TOD-V2).
+[5] SET, CVPR'25 — [paper](https://openaccess.thecvf.com/content/CVPR2025/html/Sun_SET_Spectral_Enhancement_for_Tiny_Object_Detection_CVPR_2025_paper.html).
+
 ## Install
 
 ```bash
