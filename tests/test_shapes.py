@@ -15,6 +15,10 @@ CONFIG_FILES = [
     "configs/ablation/no_ema_routing.yaml",
     "configs/ablation/token_budget_256.yaml",
     "configs/ablation/writeback_p2.yaml",
+    "configs/ablation/detail_enhance.yaml",
+    "configs/ablation/detail_enhance_global.yaml",
+    "configs/ablation/detail_enhance_token.yaml",
+    "configs/ablation/writeback_p2_detail_enhance.yaml",
 ]
 # ...and every code path, whether or not the paper runs it as an ablation.
 CASES = [("file", f) for f in CONFIG_FILES] + [("variant", v) for v in VARIANTS]

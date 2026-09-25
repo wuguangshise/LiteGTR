@@ -70,6 +70,28 @@ NAME = "abl_no_global_token"      # 每个实验换一个名字，否则会覆�
 
 **训练配方（学习率、调度、轮数、batch）所有实验必须完全一致**，否则差值里混进了配方的影响。
 
+## P2 候选：全局上下文 × 细节增强（2×2）
+
+不属于上面 5 个消融，而是候选的主模型改进，都针对 P2（2–8 px 目标在这一层检测）：
+
+| 配置 | P2 得到全局上下文 | P2 做细节增强 |
+|---|---|---|
+| `models/model_main.yaml` | — | — |
+| `writeback_p2.yaml` | ✓ | — |
+| `detail_enhance.yaml` | — | ✓ |
+| `writeback_p2_detail_enhance.yaml` | ✓ | ✓ |
+
+细节增强（`models/token/detail_enhance.py`）：用 P3 的路由打分图做软掩码，只在可能有目标的地方
+放大 P2 的高频细节，`F' = F + α·M·(F − AvgPool3×3(F))`，α 每通道一个、初始化为 0。
++64 参数，约 0.02G MACs。它的两个掩码消融：
+
+- `detail_enhance_global.yaml`：全图增强，不用路由 —— 若和 `detail_enhance` 一样好，增益来自高频本身，不是路由
+- `detail_enhance_token.yaml`：只在 56 个 token 处增强（硬掩码）—— 覆盖的目标少得多
+
+四格里 ✓✓ 的增益大于两个单项之和，才说明"一次路由，两处受益"。
+`train_candidates.py` 同时训练前两个候选（`cand_writeback_p2`、`cand_detail_enhance`），
+在里面的 `CANDIDATES` 换成别的配置即可训练其余几个。
+
 ## 需要别的消融时
 
 去掉 P2、去掉 FPN、改 Transformer 层数、全局 top-k、随机路由等都仍然支持，

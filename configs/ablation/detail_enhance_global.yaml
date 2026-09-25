@@ -1,0 +1,4 @@
+# Ablation of detail_enhance.yaml: sharpen P2 EVERYWHERE, no routing. If this does as
+# well as the routed version, the gain is plain high-frequency boosting, not routing.
+_base_: [detail_enhance.yaml]
+model: {detail_enhance: {mask: global}}

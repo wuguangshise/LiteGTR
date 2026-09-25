@@ -1,0 +1,5 @@
+# Ablation of detail_enhance.yaml: sharpen only at the 56 selected tokens (hard mask)
+# instead of the soft score map. Covers far fewer objects and passes no gradient to
+# the scorer through the mask.
+_base_: [detail_enhance.yaml]
+model: {detail_enhance: {mask: token}}

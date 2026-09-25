@@ -1,0 +1,12 @@
+# Candidate: routed detail enhancement on P2 (models/token/detail_enhance.py).
+# High-frequency detail of P2 is amplified where the P3 routing score map says an
+# object is: F' = F + alpha * M * (F - AvgPool3x3(F)), M = dilated sigmoid(score).
+# alpha starts at 0 (identity at initialisation). Cost at 640: +64 params, ~0.02G MACs.
+_base_: [../models/model_main.yaml]
+model:
+  detail_enhance:
+    enabled: true
+    mask: score          # score (the design) | global | token
+    levels: [P2]
+    source: P3           # score map that drives the mask (finest token level)
+    dilate: 3            # grow the mask so it covers object borders, not only centres

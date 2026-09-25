@@ -314,6 +314,23 @@ skips any step whose loss is not finite -- no backward, update or EMA -- and
 restores the BatchNorm statistics its forward wrote, so one bad batch can no
 longer poison a run. Skips are logged as `train/nonfinite_steps`.
 
+### P0-7 Routed detail enhancement (candidate)
+`models/token/detail_enhance.py`, `model.detail_enhance` (default off),
+`configs/ablation/detail_enhance*.yaml`. The routing score maps are supervised as
+GT-centre heatmaps, so `sigmoid(score)` is a class-agnostic object map. It is reused
+to decide where local detail is amplified on P2:
+`F' = F + alpha * M * (F - AvgPool3x3(F))`, `M = MaxPool3(Up(sigmoid(S_P3)))`,
+`alpha` per channel, initialised to 0 (identity at start). One pass -- P2 only feeds
+the head, and the score maps exist before it; +64 params, ~0.02G MACs at 640;
+static ONNX.
+
+Why on features and not on the image: the tokens exist only after the backbone, so
+enhancing the input would need a second backbone pass. Why a soft score mask and
+not the selected tokens: 56 tokens miss most objects in a dense image, and a hard
+top-k mask passes no gradient. `mask: global` and `mask: token` are the controls.
+With `writeback_p2` it forms a 2x2 on P2 (context x detail); the paper claim
+"one routing, two gains" needs the combined gain to exceed the two single ones.
+
 ## 3. P1 — paper-level decisions
 
 ### P1-6 Pretraining: unified protocol, not a ban

@@ -1,0 +1,7 @@
+# Both P2 candidates together: global context written into P2 (writeback_p2.yaml) AND
+# routed detail enhancement on P2 (detail_enhance.yaml). With main, writeback_p2 and
+# detail_enhance this completes a 2x2 -- context x detail on P2 -- which tests whether
+# one routing pays twice ("route once, refine twice").
+_base_: [writeback_p2.yaml]
+model:
+  detail_enhance: {enabled: true, mask: score, levels: [P2], source: P3, dilate: 3}

@@ -30,6 +30,7 @@ from losses.token_routing import TokenRoutingLoss
 from models.backbone.builder import build_backbone
 from models.head.gfl_head import GFLHead
 from models.neck.pyramid_projection import LocalCNNPath, PyramidProjection
+from models.token.detail_enhance import RoutedDetailEnhance
 from models.token.ema_token_router import EMATokenRouter, bn_batch_stats_only, photometric_view
 from models.token.geometric_writeback import MultiLevelWriteback
 from models.token.token_mixer import TokenMixer
@@ -94,6 +95,21 @@ class LiteGTR(nn.Module):
             self.routing_loss = None
             self.scorer_no_decay = False
 
+        # Routed detail enhancement (models/token/detail_enhance.py): sharpen high-frequency
+        # detail where the routing score map says objects are. Absent = off.
+        de = mc.get("detail_enhance", {}) or {}
+        self.detail_enhance = None
+        if de.get("enabled", False):
+            mask = de.get("mask", "score")
+            if mask != "global" and not self.use_token:
+                raise ValueError("detail_enhance.mask 'score'/'token' needs the token path; use 'global'")
+            source = de.get("source", "P3")
+            if mask == "score" and source not in self.token_levels:
+                raise ValueError(f"detail_enhance.source {source!r} is not a token level {self.token_levels}")
+            self.detail_enhance = RoutedDetailEnhance(
+                dim, [lv for lv in de.get("levels", ["P2"]) if lv in self.levels],
+                mask=mask, source=source, dilate=de.get("dilate", 3))
+
         hd = mc["head"]
         self.head = GFLHead(self.num_classes, dim, strides=self.strides,
                             stacked_convs=hd.get("stacked_convs", 2),
@@ -128,6 +144,7 @@ class LiteGTR(nn.Module):
         fmap = dict(zip(self.levels, feats))
 
         self._last_student_maps = self._last_teacher_maps = None
+        score_maps = coords = None
         if self.use_token:
             tok_in = {lv: fmap[lv] for lv in self.token_levels}
             sel = self.selector(tok_in)
@@ -137,6 +154,9 @@ class LiteGTR(nn.Module):
                     self._teacher_inputs(images, tok_in))
             mixed = self.mixer(sel["tokens"], sel["coords"], sel["level_ids"])
             fmap = self.writeback(fmap, mixed, sel["coords"])
+            score_maps, coords = sel["score_maps"], sel["coords"]
+        if self.detail_enhance is not None:
+            fmap = self.detail_enhance(fmap, score_maps, coords)
         return [fmap[lv] for lv in self.levels]
 
     @torch.no_grad()
