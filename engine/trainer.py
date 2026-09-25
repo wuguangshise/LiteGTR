@@ -229,11 +229,25 @@ class Trainer:
             if (self.no_aug_epochs and not self._mosaic_closed
                     and epoch > self.epochs - self.no_aug_epochs):
                 self._close_mosaic(epoch)
+            if self.device.type == "cuda":
+                torch.cuda.reset_peak_memory_stats(self.device)
             tr = self.train_one_epoch(epoch)
             data_wait = tr.pop("_data_wait", 0.0)
             t_train = time.time() - t0
             row = {"epoch": epoch, **{f"train/{k}": _sig(v) for k, v in tr.items()},
                    "lr": self.scheduler.get_last_lr()[0]}
+            if self.device.type == "cuda":
+                # A main run went from ~150 s to ~1850 s of pure train time per epoch
+                # at epoch 155, with data wait unchanged, and was back to normal after
+                # a resume. On Windows the driver silently moves CUDA allocations into
+                # system RAM once the card is full ("sysmem fallback"), which is ~10x
+                # slower and raises no error. Logging the peak here makes a creeping
+                # footprint visible in results.csv; handing the allocator's cached,
+                # fragmented blocks back once per epoch keeps it from creeping.
+                gib = 1024 ** 3
+                row["mem/peak_reserved_GiB"] = round(torch.cuda.max_memory_reserved(self.device) / gib, 2)
+                row["mem/peak_allocated_GiB"] = round(torch.cuda.max_memory_allocated(self.device) / gib, 2)
+                torch.cuda.empty_cache()
 
             t_val0 = time.time()
             t_tok = 0.0
