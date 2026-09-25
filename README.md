@@ -252,6 +252,11 @@ runs/train/<name>/
 ## Notes
 
 * Windows-native: `pathlib` throughout, no shell dependencies, main-guarded entry points.
+* Epochs suddenly ~10x slower with `time/data` unchanged: the GPU is out of memory and
+  the Windows driver has moved allocations into system RAM. Check the `mem/peak_*`
+  columns in `results.csv`, resume from `last.pt`, and consider NVIDIA Control Panel →
+  *CUDA - Sysmem Fallback Policy* → *Prefer No Sysmem Fallback*, which turns the
+  slowdown into an out-of-memory error that a resume recovers from.
 * Dataset roots live in YAML (or `DATA_ROOT`), never in code.
 * `pytest tests/` — `test_param_budget.py` fails if the model outgrows its budget;
   `test_onnx_export.py` fails if the token path acquires dynamic shapes.
