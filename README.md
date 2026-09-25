@@ -109,7 +109,8 @@ boxes on one tall object survive class-wise NMS.
 Drawings (`val_predictions/` at the end of training, `tools/val.py` / `tools/test.py
 --save-dir`) therefore pass through a separate `vis:` block -- score ≥ 0.3,
 class-agnostic NMS 0.6, containment 0.8, class names without scores -- so a figure
-shows one box per object. It never touches a metric. To redraw an existing checkpoint:
+shows one box per object. Ground-truth boxes are not drawn (`vis.show_gt: true` adds
+them in grey). It never touches a metric. To redraw an existing checkpoint:
 
 ```bash
 python tools/test.py --config configs/datasets/visdrone_rgb.yaml configs/models/model_main.yaml \

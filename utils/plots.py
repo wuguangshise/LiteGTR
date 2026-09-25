@@ -108,15 +108,18 @@ def plot_pr_curves(per_class: dict[str, tuple[np.ndarray, np.ndarray]], path: st
 
 def draw_predictions(img_bgr: np.ndarray, dt_boxes, dt_scores, dt_labels,
                      gt_boxes, classes: list[str], conf: float = 0.25,
-                     label: str = "class_score") -> np.ndarray:
-    """GT in grey, predictions in colour -- for ``val_predictions/``.
+                     label: str = "class_score", show_gt: bool = False) -> np.ndarray:
+    """Predictions in colour -- for ``val_predictions/``. With ``show_gt`` the
+    ground truth is drawn underneath in grey; off by default, since GT and
+    predictions on the same small objects overlap into clutter.
 
     ``label``: ``none`` (colour only), ``class`` or ``class_score``."""
     assert label in ("none", "class", "class_score"), label
     import cv2
     out = img_bgr.copy()
-    for b in np.asarray(gt_boxes).reshape(-1, 4).astype(int):
-        cv2.rectangle(out, (b[0], b[1]), (b[2], b[3]), (150, 150, 150), 1)
+    if show_gt:
+        for b in np.asarray(gt_boxes).reshape(-1, 4).astype(int):
+            cv2.rectangle(out, (b[0], b[1]), (b[2], b[3]), (150, 150, 150), 1)
     palette = [(66, 135, 245), (66, 245, 135), (245, 135, 66), (245, 66, 135),
                (135, 66, 245), (245, 200, 66), (66, 245, 245), (200, 66, 245),
                (120, 200, 120), (200, 120, 120)]

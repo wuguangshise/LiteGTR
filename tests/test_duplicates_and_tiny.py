@@ -180,3 +180,20 @@ def test_vis_defaults_apply_to_configs_without_a_vis_block():
 
     assert vis_cfg({}) == vis_cfg({"vis": {"score_thr": 0.3, "nms_iou": 0.6, "agnostic": True,
                                            "containment": 0.8, "label": "class"}})
+
+
+def test_drawings_omit_ground_truth_by_default():
+    """Grey GT boxes under the predictions made small-object figures unreadable."""
+    import numpy as np
+
+    from engine.evaluator import vis_cfg
+    from models.build import load_config
+    from utils.plots import draw_predictions
+
+    assert vis_cfg(load_config("configs/models/model_main.yaml"))["show_gt"] is False
+    assert vis_cfg({})["show_gt"] is False
+    img = np.zeros((64, 64, 3), np.uint8)
+    gt = np.array([[10, 10, 40, 40]], np.float32)
+    none = np.zeros((0, 4)), np.zeros(0), np.zeros(0)
+    assert not draw_predictions(img, *none, gt, ["a"]).any()
+    assert draw_predictions(img, *none, gt, ["a"], show_gt=True).any()

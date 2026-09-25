@@ -59,6 +59,7 @@ vis:
   agnostic: true          # one box per location whatever the class
   containment: 0.8        # drop a box >= 80% inside a higher-scoring one
   label: class            # none | class | class_score
+  show_gt: false          # true: ground truth underneath in grey (clutters small objects)
 
 assigner:
   topk: 13

@@ -39,7 +39,7 @@ def vis_cfg(cfg: dict) -> dict:
     v = cfg.get("vis", {}) or {}
     return {"score_thr": v.get("score_thr", 0.3), "nms_iou": v.get("nms_iou", 0.6),
             "agnostic": v.get("agnostic", True), "containment": v.get("containment", 0.8),
-            "label": v.get("label", "class")}
+            "label": v.get("label", "class"), "show_gt": v.get("show_gt", False)}
 
 
 def display_filter(boxes: np.ndarray, scores: np.ndarray, labels: np.ndarray,
@@ -137,7 +137,8 @@ def evaluate(model, loader, device, classes: list[str], score_thr: float = 0.02,
                     vb, vs, vl = display_filter(dt_b, dt_s, dt_l, **vis)
                     cv2.imwrite(str(vis_dir / f"{img_id:04d}_{name}"),
                                 draw_predictions(img.astype(np.uint8), vb, vs, vl, gt_b, classes,
-                                                 conf=0.0, label=vis["label"]))
+                                                 conf=0.0, label=vis["label"],
+                                                 show_gt=vis["show_gt"]))
                 except Exception:
                     pass
             img_id += 1
