@@ -1,4 +1,4 @@
-"""train_candidates.py trains the P2 candidates, alone or two at a time."""
+"""train_candidates.py trains the P2 candidates one after another."""
 import subprocess
 import sys
 
@@ -42,15 +42,16 @@ def test_dry_run_lists_both_and_trains_nothing(tmp_path, monkeypatch):
         assert name in out.stdout
 
 
-def test_parallel_launches_every_candidate_and_collects_exit_codes(tmp_path, monkeypatch):
-    """Two children run at once; each writes its own console.log; exit codes come back."""
-    monkeypatch.setattr(C, "POLL_SECONDS", 0.2)
+def test_candidates_run_one_after_another(tmp_path):
+    """The second candidate starts only after the first has exited; a failure does
+    not stop the next one."""
+    stamp = tmp_path / "order.txt"
     todo = []
-    for i, code in enumerate((0, 3)):
-        run = tmp_path / f"c{i}"
-        cmd = [sys.executable, "-c", f"import time; print('hi {i}'); time.sleep(0.5); raise SystemExit({code})"]
-        todo.append((f"c{i}", cmd, run))
-    rc = C.run_parallel(todo)
-    assert rc == {"c0": 0, "c1": 3}
-    assert "hi 0" in (tmp_path / "c0" / "console.log").read_text(encoding="utf-8")
-    assert "hi 1" in (tmp_path / "c1" / "console.log").read_text(encoding="utf-8")
+    for i, code in enumerate((3, 0)):
+        cmd = [sys.executable, "-c",
+               f"import time; open(r'{stamp}', 'a').write('start{i} '); time.sleep(0.3); "
+               f"open(r'{stamp}', 'a').write('end{i} '); raise SystemExit({code})"]
+        todo.append((f"c{i}", cmd, tmp_path / f"c{i}"))
+    rc = C.run_in_order(todo)
+    assert rc == {"c0": 3, "c1": 0}
+    assert stamp.read_text().split() == ["start0", "end0", "start1", "end1"]

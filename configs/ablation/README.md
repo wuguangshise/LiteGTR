@@ -89,7 +89,7 @@ NAME = "abl_no_global_token"      # 每个实验换一个名字，否则会覆�
 - `detail_enhance_token.yaml`：只在 56 个 token 处增强（硬掩码）—— 覆盖的目标少得多
 
 四格里 ✓✓ 的增益大于两个单项之和，才说明"一次路由，两处受益"。
-`train_candidates.py` 同时训练前两个候选（`cand_writeback_p2`、`cand_detail_enhance`），
+`train_candidates.py` 依次训练前两个候选（`cand_writeback_p2`、`cand_detail_enhance`），
 在里面的 `CANDIDATES` 换成别的配置即可训练其余几个。
 
 ## 需要别的消融时
