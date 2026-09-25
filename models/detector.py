@@ -23,6 +23,7 @@ from torchvision.ops import batched_nms
 from assigners.task_aligned_assigner import TaskAlignedAssigner
 from losses.dfl import DistributionFocalLoss
 from losses.giou import GIoULoss, bbox_iou_aligned
+from losses.nwd import NWDLoss
 from losses.qfl import QualityFocalLoss
 from losses.token_consistency import TokenConsistencyLoss
 from losses.token_routing import TokenRoutingLoss
@@ -103,6 +104,9 @@ class LiteGTR(nn.Module):
         self.qfl = QualityFocalLoss(loss_weight=lc.get("qfl_weight", 1.0))
         self.giou = GIoULoss(loss_weight=lc.get("giou_weight", 2.0))
         self.dfl = DistributionFocalLoss(loss_weight=lc.get("dfl_weight", 0.25))
+        # NWD box term next to GIoU; on in the default recipe (configs/_base_/schedule.yaml), 0 = off
+        nwd_w = lc.get("nwd_weight", 0.0)
+        self.nwd = NWDLoss(constant=lc.get("nwd_constant", 12.8), loss_weight=nwd_w) if nwd_w > 0 else None
         self.token_consistency = TokenConsistencyLoss(
             temperature=lc.get("token_temperature", 1.0),
             hard_ratio=lc.get("token_hard_ratio", 1.0),
@@ -214,6 +218,8 @@ class LiteGTR(nn.Module):
             w = torch.cat(pos_w)
             wsum = w.sum().clamp_min(1.0)
             losses["loss_giou"] = self.giou(pb, tb, weight=w, avg_factor=wsum)
+            if self.nwd is not None:
+                losses["loss_nwd"] = self.nwd(pb, tb, weight=w, avg_factor=wsum)
 
             reg_max = self.head.reg_max
             tgt_dist = torch.stack([
@@ -226,6 +232,8 @@ class LiteGTR(nn.Module):
                 weight=w[:, None].expand(-1, 4).reshape(-1), avg_factor=wsum * 4)
         else:
             losses["loss_giou"] = boxes.sum() * 0.0
+            if self.nwd is not None:
+                losses["loss_nwd"] = boxes.sum() * 0.0
             losses["loss_dfl"] = reg.sum() * 0.0
 
         if self._last_teacher_maps is not None:

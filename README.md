@@ -224,7 +224,7 @@ python tools/submit_visdrone.py --config configs/datasets/visdrone_rgb.yaml \
 configs/    _base_ / datasets / models / ablation / baselines   — every variant is a YAML key
 datasets/   base · builder · visdrone · dronevehicle · transforms · metrics · prepare/
 models/     backbone (tinynext + builder) · baselines/ · neck · token · head · detector · build
-losses/     qfl · giou · dfl · token_consistency · token_routing
+losses/     qfl · giou · nwd · dfl · token_consistency · token_routing
 assigners/  task_aligned_assigner (with STAL)
 engine/     trainer · evaluator · ema · checkpoint · recorder
 tools/      profile_model · analyze_dataset · visualize_labels · train · val · test

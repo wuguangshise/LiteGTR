@@ -26,7 +26,9 @@ train:
 
 loss:
   qfl_weight: 1.0
-  giou_weight: 2.0
+  giou_weight: 1.0       # box loss = GIoU 1.0 + NWD 1.0 (was GIoU 2.0); same total weight
+  nwd_weight: 1.0         # NWD (losses/nwd.py): a pixel offset costs tiny and large boxes alike
+  nwd_constant: 12.8      # NWD paper's C (AI-TOD mean object size); boxes in input pixels
   dfl_weight: 0.25
   token_weight: 0.5       # EMA routing consistency
   token_temperature: 1.0
