@@ -61,7 +61,10 @@ class _Attention(nn.Module):
         b, n, d = x.shape
         qkv = self.qkv(x).reshape(b, n, 3, self.h, d // self.h).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        out = (attn @ v).transpose(1, 2).reshape(b, n, d)
+        # fp32 and scaled before the product, as in the geometric writeback: a half
+        # matmul overflows at 65504 and the softmax of an inf is NaN.
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            attn = (q.float() * self.scale) @ k.float().transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+        out = (attn.to(v.dtype) @ v).transpose(1, 2).reshape(b, n, d)
         return self.proj(out)

@@ -82,7 +82,15 @@ class GeometricWriteback(nn.Module):
         if self.mode == "broadcast":
             attn = feat.new_full((b, self.h, hw, n), 1.0 / n)
         else:
-            logits = (q @ k.transpose(-2, -1)) * self.scale                    # (B,h,HW,N)
+            # fp32, scaled BEFORE the product. Under autocast a matmul returns half,
+            # and q comes from an un-normalised feature map, k from the un-normalised
+            # mixer output: on VisDrone the raw q.k grows past fp16's 65504 within the
+            # first epoch. The inf turns the softmax into NaN, which reaches the head
+            # (detection losses NaN), poisons its BatchNorm statistics and -- repeated
+            # -- drives the AMP loss scale to zero, after which the next step writes
+            # NaN into every weight. (B,h,HW,N) is small; fp32 costs nothing here.
+            with torch.autocast(device_type=feat.device.type, enabled=False):
+                logits = (q.float() * self.scale) @ k.float().transpose(-2, -1)  # (B,h,HW,N)
             if self.mode == "geometric":
                 # The Gaussian prior is always evaluated in fp32, whatever precision
                 # the rest of the model runs in. (d/sigma)^2 reaches ~2500 at
@@ -93,7 +101,7 @@ class GeometricWriteback(nn.Module):
                 sigma = nn.functional.softplus(self.sigma(tokens)).float() + self.sigma_min
                 d = grid.view(1, hw, 1, 2) - coords.float().view(b, 1, n, 2)   # (B,HW,N,2)
                 g = -0.5 * ((d / sigma.view(b, 1, n, 2)) ** 2).sum(-1)         # (B,HW,N)
-                logits = logits.float() + g.unsqueeze(1)
+                logits = logits + g.unsqueeze(1)
             attn = logits.softmax(dim=-1)
 
         out = attn.to(v.dtype) @ v                                             # (B,h,HW,dh)

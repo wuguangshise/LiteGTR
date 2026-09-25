@@ -110,6 +110,12 @@ class Trainer:
         # so the model finishes on the real image distribution. HSV and flip stay on.
         self.no_aug_epochs = tc.get("no_aug_epochs", 0)
         self._mosaic_closed = False
+        # BatchNorm running statistics are written during the FORWARD pass, before a
+        # non-finite loss can be seen; train_one_epoch restores them on a skipped step.
+        self._bn_buffers = [b for m in self.model.modules()
+                            if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)
+                            and m.track_running_stats
+                            for b in (m.running_mean, m.running_var)]
 
     def train_one_epoch(self, epoch: int) -> dict:
         """One pass over the training set.
@@ -123,10 +129,22 @@ class Trainer:
 
         Also returns ``_data_wait``: seconds spent blocked on the DataLoader. If
         it is a large share of the epoch, the input pipeline is the bottleneck.
+
+        A step whose loss is not finite is skipped whole -- no backward, no update,
+        no EMA -- and the BatchNorm statistics its forward wrote are put back. Handing
+        a NaN loss to the GradScaler instead is not harmless: the scaler skips the
+        update but the NaN forward has already poisoned BatchNorm running statistics
+        (which the weight EMA copies, so validation reads 0), and every such step
+        halves the loss scale. Enough of them drive it to exactly 0, and then a finite
+        step writes NaN into every weight: 0 gradients pass the scaler's inf check and
+        are only then multiplied by 1/0. That is how one overflowing layer ended a
+        200-epoch run in epoch 2. The check costs one host sync per step; skipped
+        steps are counted in ``nonfinite_steps`` and left out of the epoch means.
         """
         self.model.train()
         agg: dict[str, torch.Tensor] = {}
         nb = 0
+        skipped = 0
         log_every = self.cfg["train"].get("log_every", 20)
         data_wait = 0.0
         pbar = tqdm(self.train_loader, desc=f"epoch {epoch}/{self.epochs}", leave=False)
@@ -140,9 +158,17 @@ class Trainer:
             data_wait += time.perf_counter() - t_fetch
 
             images = images.to(self.device, non_blocking=True)
+            bn_state = [b.clone() for b in self._bn_buffers]
             with torch.autocast(device_type=self.device.type, enabled=self.amp):
                 losses = self.model.loss(images, targets)
                 total = sum(losses.values())
+            if not torch.isfinite(total):
+                with torch.no_grad():
+                    for b, saved in zip(self._bn_buffers, bn_state):
+                        b.copy_(saved)
+                skipped += 1
+                self.scheduler.step()      # the schedule is defined in steps; keep it aligned
+                continue
             self.optimizer.zero_grad(set_to_none=True)
             self.scaler.scale(total).backward()
             if self.clip:
@@ -164,6 +190,10 @@ class Trainer:
                 pbar.set_postfix(loss=f"{float(total):.3f}",
                                  lr=f"{self.scheduler.get_last_lr()[0]:.2e}")
         out = {k: float(v) / max(nb, 1) for k, v in agg.items()}
+        out["nonfinite_steps"] = skipped
+        if skipped:
+            self.recorder.logger.warning(
+                f"epoch {epoch}: skipped {skipped} step(s) with a non-finite loss")
         out["_data_wait"] = data_wait
         return out
 

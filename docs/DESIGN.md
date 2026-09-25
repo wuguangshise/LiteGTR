@@ -285,6 +285,35 @@ as a table row; `run_experiments.py` retrains all of them.
 
 ---
 
+### P0-6 fp16 overflow in the attention logits
+`models/token/geometric_writeback.py`, `models/token/token_mixer.py`,
+`engine/trainer.py`. The first run with the conv stem, batch 8 and mosaic 1.0 went
+NaN in epoch 1 (detection losses only) and everywhere from epoch 2; validation
+read 0 to the end.
+
+*Cause.* The writeback computed `q @ k^T` under autocast, i.e. as a half matmul,
+and scaled it afterwards. q comes from an un-normalised feature map, k from the
+un-normalised mixer output; on real VisDrone images the raw product reached ~10^4
+within 50 steps (every other activation stayed below ~100) and passes fp16's 65504
+on some batch. `softmax(inf)` is NaN, which reaches only the head -- hence NaN
+detection losses with finite routing losses. What made it permanent:
+
+1. the NaN forward writes the head's BatchNorm running statistics, and the weight
+   EMA copies them, so every later validation reads 0;
+2. each such step makes the GradScaler halve the loss scale; enough of them take
+   it to exactly 0, and the next finite step then puts NaN into every weight --
+   zero gradients pass the scaler's inf check and are only then multiplied by 1/0.
+
+Both reproduced on CPU (`tests/test_fp16_attention.py`,
+`tests/test_trainer_nonfinite.py`). The overflow path was there before the
+recipe change; the new stem and recipe made it frequent enough to trigger.
+
+*Fix.* Attention logits are computed in fp32 with the scale applied before the
+product (writeback and mixer; `(B,h,HW,N)` is small). The trainer additionally
+skips any step whose loss is not finite -- no backward, update or EMA -- and
+restores the BatchNorm statistics its forward wrote, so one bad batch can no
+longer poison a run. Skips are logged as `train/nonfinite_steps`.
+
 ## 3. P1 — paper-level decisions
 
 ### P1-6 Pretraining: unified protocol, not a ban
