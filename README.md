@@ -49,13 +49,6 @@ Protocol: see [Evaluation protocol](#evaluation-protocol).
 
 | Method | Venue | Params (M) | GFLOPs | Latency (ms) | AP | AP<sub>50</sub> | AP<sub>75</sub> | AP<sub>S</sub> | AP<sub>vt</sub> | AP<sub>t</sub> |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| *Trained and evaluated under our protocol*<sup>a</sup> | | | | | | | | | | |
-| YOLOv8n | Ultralytics | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| YOLO11n | Ultralytics | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| RemDet-Tiny | AAAI'25 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| DEIM-N<sup>b</sup> | CVPR'25 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| **LiteGTR-Edge-S (ours)** | — | 1.22<sup>c</sup> | 5.1<sup>c</sup> | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| **LiteGTR (ours)** | — | 2.32<sup>c</sup> | 10.1<sup>c</sup> | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | *Reported by the original authors*<sup>d</sup> | | | | | | | | | | |
 | RemDet-Tiny [1] | AAAI'25 | 3.2 | 4.6 | — | 21.8 | 37.1 | 21.9 | 12.7 | — | — |
 | RemDet-S [1] | AAAI'25 | 11.9 | 16.0 | — | 24.7 | 41.5 | 25.0 | 15.4 | — | — |
@@ -64,6 +57,13 @@ Protocol: see [Evaluation protocol](#evaluation-protocol).
 | UAV-DETR-R18 [2] | arXiv'25 | 20.5 | 64.3 | — | 29.8 | 48.8 | — | — | — | — |
 | FCOS w/ SET [5] | CVPR'25 | — | — | — | 21.9 | — | — | —<sup>f</sup> | 1.6 | 5.7 |
 | Cascade R-CNN w/ RFLA + SET [5] | CVPR'25 | — | — | — | 28.5 | — | — | —<sup>f</sup> | 5.2 | 13.5 |
+| *Trained and evaluated under our protocol*<sup>a</sup> | | | | | | | | | | |
+| YOLOv8n | Ultralytics | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| YOLO11n | Ultralytics | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| RemDet-Tiny | AAAI'25 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| DEIM-N<sup>b</sup> | CVPR'25 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| **LiteGTR-Edge-S (ours)** | — | 1.22<sup>c</sup> | 5.1<sup>c</sup> | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| **LiteGTR (ours)** | — | 2.32<sup>c</sup> | 10.1<sup>c</sup> | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 
 <sup>a</sup> Same data, 640 input and evaluation code (predictions are scored by this
 repository's evaluator). Batch 8. YOLO and RemDet are trained from scratch for 200
@@ -86,18 +86,18 @@ Mean object size ≈ 12.7 px. Only the key metrics are listed.
 
 | Method | Source | AP | AP<sub>50</sub> | AP<sub>vt</sub> | AP<sub>t</sub> |
 |---|---|---:|---:|---:|---:|
-| *Trained and evaluated under our protocol*<sup>a</sup> | | | | | |
-| YOLOv8n | Ultralytics | TBD | TBD | TBD | TBD |
-| YOLO11n | Ultralytics | TBD | TBD | TBD | TBD |
-| RemDet-Tiny | AAAI'25 | TBD | TBD | TBD | TBD |
-| DEIM-N | CVPR'25 | TBD | TBD | TBD | TBD |
-| **LiteGTR (ours)** | — | TBD | TBD | TBD | TBD |
 | *Reported by the original authors*<sup>e</sup> | | | | | |
 | Faster R-CNN w/ RFLA [3] | ECCV'22 | 22.6 | 54.8 | 8.6 | 21.7 |
 | DetectoRS w/ RFLA [3] | ECCV'22 | 25.7 | 58.9 | 9.2 | 25.5 |
 | NWD-RKA [4] | ISPRS'22 | 23.4 | 53.5 | 8.7 | 23.8 |
 | DINO-DETR [4] | ICLR'23 | 25.9 | 61.3 | 12.7 | 25.3 |
 | DQ-DETR [4] | ECCV'24 | 30.5 | 69.2 | 15.2 | 30.9 |
+| *Trained and evaluated under our protocol*<sup>a</sup> | | | | | |
+| YOLOv8n | Ultralytics | TBD | TBD | TBD | TBD |
+| YOLO11n | Ultralytics | TBD | TBD | TBD | TBD |
+| RemDet-Tiny | AAAI'25 | TBD | TBD | TBD | TBD |
+| DEIM-N | CVPR'25 | TBD | TBD | TBD | TBD |
+| **LiteGTR (ours)** | — | TBD | TBD | TBD | TBD |
 
 <sup>e</sup> Trained on AI-TOD-v2 trainval, tested on AI-TOD-v2 test: RFLA 12 epochs [3];
 NWD-RKA, DINO-DETR and DQ-DETR 36 epochs as tabulated in [4]. All five use a ResNet-50
