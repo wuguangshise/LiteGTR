@@ -16,6 +16,13 @@ a single-modality (RGB) detector for edge deployment.
   <img src="docs/figures/architecture.webp" alt="LiteGTR architecture" width="100%"/>
 </p>
 
+> **Figure status.** This diagram shows an earlier design and will be redrawn once the
+> final architecture is fixed by the experiments. Not yet shown: the overlapping conv
+> stem (`backbone.stem: conv`), routed detail enhancement on P2
+> (`models/token/detail_enhance.py`) and, if adopted, the global-token writeback into P2
+> (`writeback_p2`). The text below and the configs describe the current code.
+> 结构图为早期版本，最终结构由实验确定后会重新绘制；文字说明和配置文件以当前代码为准。
+
 * **Local top-k routing** — each score map is cut into windows and a fixed number of
   tokens is taken from every window, so the graph has static shapes (ONNX / TensorRT).
 * **Geometry-aware writeback** — tokens are written back through attention whose logits
