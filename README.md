@@ -84,24 +84,24 @@ this column, so it is not listed here.
 
 Mean object size ≈ 12.7 px. Only the key metrics are listed.
 
-| Method | Backbone | AP | AP<sub>50</sub> | AP<sub>vt</sub> | AP<sub>t</sub> |
+| Method | Source | AP | AP<sub>50</sub> | AP<sub>vt</sub> | AP<sub>t</sub> |
 |---|---|---:|---:|---:|---:|
 | *Trained and evaluated under our protocol*<sup>a</sup> | | | | | |
-| YOLOv8n | CSP (n) | TBD | TBD | TBD | TBD |
-| YOLO11n | CSP (n) | TBD | TBD | TBD | TBD |
-| RemDet-Tiny | RemDet | TBD | TBD | TBD | TBD |
-| DEIM-N | HGNetv2-B0 | TBD | TBD | TBD | TBD |
-| **LiteGTR (ours)** | TinyNeXt-M | TBD | TBD | TBD | TBD |
+| YOLOv8n | Ultralytics | TBD | TBD | TBD | TBD |
+| YOLO11n | Ultralytics | TBD | TBD | TBD | TBD |
+| RemDet-Tiny | AAAI'25 | TBD | TBD | TBD | TBD |
+| DEIM-N | CVPR'25 | TBD | TBD | TBD | TBD |
+| **LiteGTR (ours)** | — | TBD | TBD | TBD | TBD |
 | *Reported by the original authors*<sup>e</sup> | | | | | |
-| Faster R-CNN w/ RFLA [3] | R-50 | 22.6 | 54.8 | 8.6 | 21.7 |
-| DetectoRS w/ RFLA [3] | R-50 | 25.7 | 58.9 | 9.2 | 25.5 |
-| NWD-RKA [4] | R-50 | 23.4 | 53.5 | 8.7 | 23.8 |
-| DINO-DETR [4] | R-50 | 25.9 | 61.3 | 12.7 | 25.3 |
-| DQ-DETR [4] | R-50 | 30.5 | 69.2 | 15.2 | 30.9 |
+| Faster R-CNN w/ RFLA [3] | ECCV'22 | 22.6 | 54.8 | 8.6 | 21.7 |
+| DetectoRS w/ RFLA [3] | ECCV'22 | 25.7 | 58.9 | 9.2 | 25.5 |
+| NWD-RKA [4] | ISPRS'22 | 23.4 | 53.5 | 8.7 | 23.8 |
+| DINO-DETR [4] | ICLR'23 | 25.9 | 61.3 | 12.7 | 25.3 |
+| DQ-DETR [4] | ECCV'24 | 30.5 | 69.2 | 15.2 | 30.9 |
 
 <sup>e</sup> Trained on AI-TOD-v2 trainval, tested on AI-TOD-v2 test: RFLA 12 epochs [3];
-NWD-RKA, DINO-DETR and DQ-DETR 36 epochs as tabulated in [4]. These detectors use
-R-50 backbones, roughly 10–20× LiteGTR's parameters. SET [5] is not listed: it reports
+NWD-RKA, DINO-DETR and DQ-DETR 36 epochs as tabulated in [4]. All five use a ResNet-50
+backbone, roughly 10–20× LiteGTR's parameters. SET [5] is not listed: it reports
 the original AI-TOD (v1) only, whose annotations differ from AI-TOD-v2; it is compared
 on VisDrone in Table 1 instead.
 
