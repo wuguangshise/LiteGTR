@@ -153,6 +153,7 @@ def main() -> None:
 
     loader = DataLoader(ds, batch_size=a.batch, shuffle=False, collate_fn=collate_fn, num_workers=0)
     stal = float(cfg.get("assigner", {}).get("stal_size", 0) or 8)
+    max_det = int((cfg.get("test") or {}).get("max_det", 1000))
     cov_n = np.zeros(len(SIZE_BINS)); miss_plain = np.zeros(len(SIZE_BINS)); miss_stal = np.zeros(len(SIZE_BINS))
     cache = []                                  # per image: candidate scores/boxes + GT
     for images, targets in loader:
@@ -202,7 +203,7 @@ def main() -> None:
             types = {"correct": 0, "duplicate": 0, "wrong_class": 0, "localisation": 0, "background": 0}
             drawn = 0
             for img_id, (s, bx, gt_b, gt_l, meta) in enumerate(cache):
-                p = postprocess(s, bx, (h, w), thr, iou, 300, 30000, agn, cont, multi)
+                p = postprocess(s, bx, (h, w), thr, iou, max_det, 30000, agn, cont, multi)
                 db, dsc, dl = p["boxes"].numpy(), p["scores"].numpy(), p["labels"].numpy()
                 # mAP in original pixels (as engine/evaluator.py); box types at input size
                 mh, mw, m_gb, m_gl, m_db = to_original(meta, (h, w), gt_b, gt_l, db)

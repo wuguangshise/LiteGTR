@@ -83,7 +83,7 @@ All evaluation -- validation during training, `tools/val.py`, `tools/test.py` an
 |---|---|---|
 | `score_thr` | `0.001` | |
 | `nms_iou` | `0.7` | class-wise NMS |
-| `max_det` | `300` | |
+| `max_det` | `1000` | matches the metric's largest maxDets; dense VisDrone images exceed 300 |
 | `multi_label` | `true` | one location may output several classes (pedestrian *and* people) |
 | `agnostic` | `false` | class-agnostic NMS costs ~1.3 mAP on VisDrone |
 | `containment` | `null` | e.g. `0.8` drops a box ≥ 80 % covered by a higher-scoring one |
