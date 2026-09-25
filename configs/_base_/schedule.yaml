@@ -26,7 +26,10 @@ train:
 
 loss:
   qfl_weight: 1.0
-  giou_weight: 2.0
+  iou_type: ciou          # ciou | giou -- CIoU also pulls centres together when one box contains the other
+  iou_weight: 1.0         # box loss = CIoU 1.0 + NWD 1.0 (was GIoU 2.0); same total weight
+  nwd_weight: 1.0         # NWD (losses/nwd.py): a pixel offset costs tiny and large boxes alike
+  nwd_constant: 12.8      # NWD paper's C (AI-TOD mean object size); boxes in input pixels
   dfl_weight: 0.25
   token_weight: 0.5       # EMA routing consistency
   token_temperature: 1.0
@@ -41,7 +44,7 @@ loss:
 test:
   score_thr: 0.001
   nms_iou: 0.7
-  max_det: 300
+  max_det: 1000           # = the metric's largest maxDets (datasets/metrics.py); 300 cut dense VisDrone images
   multi_label: true       # a location may output several classes (pedestrian AND people)
   agnostic: false         # true: one NMS across classes
   containment: null       # e.g. 0.8: drop a box >= 80% covered by a higher-scoring one

@@ -83,7 +83,7 @@ All evaluation -- validation during training, `tools/val.py`, `tools/test.py` an
 |---|---|---|
 | `score_thr` | `0.001` | |
 | `nms_iou` | `0.7` | class-wise NMS |
-| `max_det` | `300` | |
+| `max_det` | `1000` | matches the metric's largest maxDets; dense VisDrone images exceed 300 |
 | `multi_label` | `true` | one location may output several classes (pedestrian *and* people) |
 | `agnostic` | `false` | class-agnostic NMS costs ~1.3 mAP on VisDrone |
 | `containment` | `null` | e.g. `0.8` drops a box ≥ 80 % covered by a higher-scoring one |
@@ -224,7 +224,7 @@ python tools/submit_visdrone.py --config configs/datasets/visdrone_rgb.yaml \
 configs/    _base_ / datasets / models / ablation / baselines   — every variant is a YAML key
 datasets/   base · builder · visdrone · dronevehicle · transforms · metrics · prepare/
 models/     backbone (tinynext + builder) · baselines/ · neck · token · head · detector · build
-losses/     qfl · giou · dfl · token_consistency · token_routing
+losses/     qfl · giou/ciou · nwd · dfl · token_consistency · token_routing
 assigners/  task_aligned_assigner (with STAL)
 engine/     trainer · evaluator · ema · checkpoint · recorder
 tools/      profile_model · analyze_dataset · visualize_labels · train · val · test
