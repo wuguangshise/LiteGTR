@@ -22,7 +22,7 @@ from torchvision.ops import batched_nms
 
 from assigners.task_aligned_assigner import TaskAlignedAssigner
 from losses.dfl import DistributionFocalLoss
-from losses.giou import GIoULoss, bbox_iou_aligned
+from losses.giou import CIoULoss, GIoULoss, bbox_iou_aligned
 from losses.nwd import NWDLoss
 from losses.qfl import QualityFocalLoss
 from losses.token_consistency import TokenConsistencyLoss
@@ -102,9 +102,13 @@ class LiteGTR(nn.Module):
 
         lc = cfg.get("loss", {})
         self.qfl = QualityFocalLoss(loss_weight=lc.get("qfl_weight", 1.0))
-        self.giou = GIoULoss(loss_weight=lc.get("giou_weight", 2.0))
+        # IoU-type box term: "ciou" (default recipe) or "giou" (the original GFL choice).
+        # Old configs that only set giou_weight keep training with GIoU.
+        self.iou_type = lc.get("iou_type", "giou")
+        iou_cls = {"ciou": CIoULoss, "giou": GIoULoss}[self.iou_type]
+        self.box_iou = iou_cls(loss_weight=lc.get("iou_weight", lc.get("giou_weight", 2.0)))
         self.dfl = DistributionFocalLoss(loss_weight=lc.get("dfl_weight", 0.25))
-        # NWD box term next to GIoU; on in the default recipe (configs/_base_/schedule.yaml), 0 = off
+        # NWD box term next to the IoU term; on in the default recipe (configs/_base_/schedule.yaml), 0 = off
         nwd_w = lc.get("nwd_weight", 0.0)
         self.nwd = NWDLoss(constant=lc.get("nwd_constant", 12.8), loss_weight=nwd_w) if nwd_w > 0 else None
         self.token_consistency = TokenConsistencyLoss(
@@ -217,7 +221,7 @@ class LiteGTR(nn.Module):
             ps = torch.cat(pos_strides)
             w = torch.cat(pos_w)
             wsum = w.sum().clamp_min(1.0)
-            losses["loss_giou"] = self.giou(pb, tb, weight=w, avg_factor=wsum)
+            losses[f"loss_{self.iou_type}"] = self.box_iou(pb, tb, weight=w, avg_factor=wsum)
             if self.nwd is not None:
                 losses["loss_nwd"] = self.nwd(pb, tb, weight=w, avg_factor=wsum)
 
@@ -231,7 +235,7 @@ class LiteGTR(nn.Module):
                 pr.reshape(-1, reg_max + 1), tgt_dist.reshape(-1),
                 weight=w[:, None].expand(-1, 4).reshape(-1), avg_factor=wsum * 4)
         else:
-            losses["loss_giou"] = boxes.sum() * 0.0
+            losses[f"loss_{self.iou_type}"] = boxes.sum() * 0.0
             if self.nwd is not None:
                 losses["loss_nwd"] = boxes.sum() * 0.0
             losses["loss_dfl"] = reg.sum() * 0.0
