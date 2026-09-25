@@ -55,6 +55,8 @@ Protocol: see [Evaluation protocol](#evaluation-protocol).
 | RemDet-M [1] | AAAI'25 | 23.3 | 34.4 | — | 27.3 | 44.7 | 28.2 | 17.3 | — | — |
 | UAV-DETR-EV2 [2] | arXiv'25 | 12.1 | 33.3 | — | 28.2 | 46.7 | — | — | — | — |
 | UAV-DETR-R18 [2] | arXiv'25 | 20.5 | 64.3 | — | 29.8 | 48.8 | — | — | — | — |
+| FCOS w/ SET [5] | CVPR'25 | — | — | — | 21.9 | — | — | —<sup>f</sup> | 1.6 | 5.7 |
+| Cascade R-CNN w/ RFLA + SET [5] | CVPR'25 | — | — | — | 28.5 | — | — | —<sup>f</sup> | 5.2 | 13.5 |
 
 <sup>a</sup> Same data, 640 input and evaluation code (predictions are scored by this
 repository's evaluator). Batch 8. YOLO and RemDet are trained from scratch for 200
@@ -65,7 +67,11 @@ backbone; DETR-style models train poorly from scratch. LiteGTR uses no pretraini
 <sup>c</sup> Measured (`tools/profile_model.py`, 640, GFLOPs = 2 × MACs; the attention
 products add ≈ 0.1 GFLOPs). Current configuration; updated if the final model changes.
 <sup>d</sup> Copied from the authors' repositories, not re-run: RemDet [1] reports FLOPs
-as given in its README; UAV-DETR [2] reports AP and AP<sub>50</sub> only. "—" = not reported.
+as given in its README; UAV-DETR [2] reports AP and AP<sub>50</sub> only; SET [5] (Table 2
+of the paper, VisDrone val) uses R-50 detectors from MMDetection and reports no parameter
+count. "—" = not reported.
+<sup>f</sup> SET's AP<sub>s</sub> is AI-TOD's 16–32 px bucket, not COCO's < 32² used in
+this column, so it is not listed here.
 
 ### Table 2 — AI-TOD-v2 test (generalisation to tiny objects)
 
@@ -85,12 +91,12 @@ Mean object size ≈ 12.7 px. Only the key metrics are listed.
 | NWD-RKA [4] | R-50 | 23.4 | 53.5 | 8.7 | 23.8 |
 | DINO-DETR [4] | R-50 | 25.9 | 61.3 | 12.7 | 25.3 |
 | DQ-DETR [4] | R-50 | 30.5 | 69.2 | 15.2 | 30.9 |
-| SET [5] | — | *to verify* | *to verify* | *to verify* | *to verify* |
 
 <sup>e</sup> Trained on AI-TOD-v2 trainval, tested on AI-TOD-v2 test: RFLA 12 epochs [3];
 NWD-RKA, DINO-DETR and DQ-DETR 36 epochs as tabulated in [4]. These detectors use
-R-50 backbones, roughly 10–20× LiteGTR's parameters. SET's AI-TOD-v2 numbers are to be
-copied from its paper [5] once verified.
+R-50 backbones, roughly 10–20× LiteGTR's parameters. SET [5] is not listed: it reports
+the original AI-TOD (v1) only, whose annotations differ from AI-TOD-v2; it is compared
+on VisDrone in Table 1 instead.
 
 ### Table 3 — Where to sharpen: routed detail restoration (core ablation)
 
@@ -124,7 +130,7 @@ Each row removes one component from the final model.
 [2] UAV-DETR — [ValiantDiligent/UAV-DETR](https://github.com/ValiantDiligent/UAV-DETR) README, VisDrone table.
 [3] RFLA, ECCV'22 — [Chasel-Tsui/mmdet-rfla](https://github.com/Chasel-Tsui/mmdet-rfla) README, Table 2 (AI-TOD-v2).
 [4] DQ-DETR, ECCV'24 — [hoiliu-0801/DQ-DETR](https://github.com/hoiliu-0801/DQ-DETR) README, Table 1 (AI-TOD-V2).
-[5] SET, CVPR'25 — [paper](https://openaccess.thecvf.com/content/CVPR2025/html/Sun_SET_Spectral_Enhancement_for_Tiny_Object_Detection_CVPR_2025_paper.html).
+[5] SET, CVPR'25 — [paper](https://openaccess.thecvf.com/content/CVPR2025/html/Sun_SET_Spectral_Enhancement_for_Tiny_Object_Detection_CVPR_2025_paper.html), Table 2 (VisDrone2019 val). Its AI-TOD results (Table 1) are on AI-TOD v1.
 
 ## Install
 
