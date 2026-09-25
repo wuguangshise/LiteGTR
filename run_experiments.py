@@ -40,9 +40,6 @@ except Exception:
 EXPERIMENTS = [
     # --- 完整模型：所有消融都和它比，先确认路由监督有效（score_entropy 明显 < 1）
     ("main",                        "configs/models/model_main.yaml",                   0, "完整模型"),
-    # --- 候选：P2 也接收 token 写回（P3-P5 上选，写回到 P2）。在消融之前跑，
-    #     若明显优于 main，就把它当作新的 main，下面的消融要基于它重跑
-    ("cand_writeback_p2",           "configs/ablation/writeback_p2.yaml",               0, "候选：token 写回 P2"),
     # --- 消融（相对完整模型只改一个变量）
     ("abl_no_global_token",         "configs/ablation/no_global_token.yaml",            0, "① 去掉整条 token 路径"),
     ("abl_token_budget_256",        "configs/ablation/token_budget_256.yaml",           0, "② token 56 -> 256"),
