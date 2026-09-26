@@ -76,9 +76,7 @@ products add ≈ 0.1 GFLOPs). Current configuration; updated if the final model 
 <sup>d</sup> Copied from the authors' repositories, not re-run: RemDet [1] reports FLOPs
 as given in its README; UAV-DETR [2] reports AP and AP<sub>50</sub> only; SET [5] (Table 2
 of the paper, VisDrone val) uses R-50 detectors from MMDetection and reports no parameter
-count. "—" = not reported. RemDet's config sets `proposal_nums=(100, 1, 10)`, so its
-AP<sub>50</sub>, AP<sub>75</sub> and AP<sub>S</sub> count 10 detections per image; only its AP is on the same
-footing as ours.
+count. "—" = not reported.
 <sup>f</sup> SET's AP<sub>s</sub> is AI-TOD's 16–32 px bucket, not COCO's < 32² used in
 this column, so it is not listed here.
 
