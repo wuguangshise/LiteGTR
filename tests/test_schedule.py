@@ -85,14 +85,15 @@ def test_validation_defaults_to_every_epoch():
     assert all(Trainer._should_validate(ns, e) for e in range(1, 11))
 
 
-def test_default_recipe_warms_up_for_five_epochs():
-    """Both entry points agree: train_litegtr.py and the YAML path (tools/train.py)."""
+def test_default_warmup_covers_adamw_second_moment():
+    """Warmup is judged in steps: AdamW's second-moment estimate needs about
+    2 / (1 - beta2) = 2000 steps. 3 epochs at batch 8 on VisDrone (6471 images,
+    808 steps per epoch) is about 2400. Both entry points agree."""
     import train_litegtr as T
     from models.build import load_config
 
-    assert T.WARMUP_EPOCHS == 5
-    assert load_config("configs/models/model_main.yaml")["train"]["warmup_epochs"] == 5
-    lrs = _lrs(dict(epochs=20, warmup_epochs=5, scheduler="flat_cosine", flat_epochs=10,
-                    final_lr_ratio=0.01))
-    assert lrs[0] < 0.05 * max(lrs)
-    assert lrs[5 * SPE - 2] < lrs[5 * SPE - 1] == max(lrs)                  # ramp ends with epoch 5
+    assert T.WARMUP_EPOCHS == 3
+    assert load_config("configs/models/model_main.yaml")["train"]["warmup_epochs"] == 3
+    steps_per_epoch = 6471 // T.BATCH_SIZE                     # drop_last=True
+    beta2 = 0.999                                              # build_optimizer's default
+    assert T.WARMUP_EPOCHS * steps_per_epoch >= 2 / (1 - beta2)

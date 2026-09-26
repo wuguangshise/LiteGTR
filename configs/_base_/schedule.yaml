@@ -5,7 +5,8 @@ train:
   optimizer: adamw
   lr: 0.001
   weight_decay: 0.05
-  warmup_epochs: 5         # linear warmup; YOLO uses 3, RemDet 10 -- from scratch at batch 8, a longer ramp
+  warmup_epochs: 3         # linear warmup; what matters is steps: AdamW needs ~2/(1-beta2) = 2000 for its
+                           # second-moment estimate; 3 epochs at batch 8 = ~2400 steps. Recompute if batch changes
   # FlatCosine (DEIM, CVPR 2025): hold the peak LR for about half the run, then
   # cosine-decay. Helps most when training from scratch.
   scheduler: flat_cosine    # flat_cosine | cosine

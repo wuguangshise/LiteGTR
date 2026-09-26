@@ -90,8 +90,9 @@ GRAD_CLIP = 10.0         # 安全阀（YOLO 同值）；0.1 是 DETR 专用
 #   warmup -> 峰值平台期 -> 余弦衰减。
 #   下面几个与总轮数挂钩的量都由 EPOCHS 推导，改 EPOCHS 时会自动按比例缩放。
 SCHEDULER = "flat_cosine"  # 'flat_cosine' / 'cosine'
-WARMUP_EPOCHS = 5          # 线性预热 5 轮（batch 8 时约 4000 步）；YOLO 3 轮、RemDet 10 轮。
-                           # 从零训练、batch 又小，前期多一点缓冲更稳
+WARMUP_EPOCHS = 3          # 线性预热。要看的是步数不是轮数：AdamW 需要约 2/(1-beta2) = 2000 步
+                           # 让二阶矩估计稳定下来；batch 8 时 3 轮约 2400 步，已经够了。
+                           # （YOLO 约 1200 步，RemDet 约 1000 步。）改 batch 时按步数重算
 FLAT_EPOCHS = EPOCHS // 2  # 峰值平台期占一半（DEIM：flat_epoch 29 / 约 58）
 FINAL_LR_RATIO = 0.01      # 衰减终点 = LR0 * 该值
 
