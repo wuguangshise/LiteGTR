@@ -99,6 +99,8 @@ EMA_DECAY = 0.9999
 
 # 数据增强
 MOSAIC_PROB = 1.0        # 每张训练图都做 mosaic（Ultralytics YOLO 默认 mosaic=1.0）
+SCALE_AUG = 0.0          # 随机缩放 U(1-x, 1+x)，0 = 关；YOLO 默认 0.5。模型配置里写了
+                         # data.scale_aug 时以配置为准（configs/ablation/scale_aug.yaml）
 NO_AUG_EPOCHS = max(10, EPOCHS // 20)  # 最后约 5% 关 mosaic，至少 10 轮（YOLO close_mosaic=10）
 
 # Token 预算（None = 用模型配置里的值）
@@ -264,8 +266,12 @@ def main():
         cfg["train"]["amp"] = False
 
     # --- 数据 ---
+    # 随机缩放属于某个实验本身时（筛选对照）写在它的模型配置里；否则用常量区的值。
+    # 写进 cfg，随 checkpoint 保存，事后能查到这个实验用了多少
+    scale_aug = float(cfg.setdefault("data", {}).setdefault("scale_aug", SCALE_AUG))
     train_ds = VisDroneDataset(root=DATA_ROOT, split=TRAIN_SPLIT, img_size=IMG_SIZE,
-                               train=True, mosaic_prob=MOSAIC_PROB, ignore_mode=IGNORE_MODE)
+                               train=True, mosaic_prob=MOSAIC_PROB, ignore_mode=IGNORE_MODE,
+                               scale_aug=scale_aug)
     val_ds = VisDroneDataset(root=DATA_ROOT, split=VAL_SPLIT, img_size=IMG_SIZE,
                              train=False, mosaic_prob=0.0, ignore_mode=EVAL_IGNORE_MODE)
     cfg["model"]["num_classes"] = len(train_ds.classes)
@@ -311,7 +317,8 @@ def main():
     sched = (f"flat_cosine  warmup {WARMUP_EPOCHS} -> 平台至 {FLAT_EPOCHS} -> 衰减至 {LR0 * FINAL_LR_RATIO:g}"
              if SCHEDULER == "flat_cosine" else f"cosine  warmup {WARMUP_EPOCHS} -> 衰减至 {LR0 * FINAL_LR_RATIO:g}")
     print(f"调度      : {sched}")
-    print(f"增强      : mosaic {MOSAIC_PROB}，最后 {NO_AUG_EPOCHS} 轮关闭   权重EMA {EMA_DECAY}")
+    print(f"增强      : mosaic {MOSAIC_PROB}，最后 {NO_AUG_EPOCHS} 轮关闭   "
+          f"随机缩放 {f'±{scale_aug:g}' if scale_aug else '关'}   权重EMA {EMA_DECAY}")
     print(f"设备      : {device}"
           + (f"  {torch.cuda.get_device_name(device.index or 0)}"
              f"  {torch.cuda.get_device_properties(device.index or 0).total_memory / 1024 ** 3:.1f} GB"

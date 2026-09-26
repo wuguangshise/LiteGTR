@@ -18,6 +18,7 @@ def build_dataset(cfg: dict, split: str, train: bool) -> DetectionDataset:
         img_size=d.get("img_size", 640),
         train=train,
         mosaic_prob=d.get("mosaic_prob", 0.5) if train else 0.0,
+        scale_aug=d.get("scale_aug", 0.0) if train else 0.0,
     )
     if name == "visdrone":
         from datasets.visdrone import VisDroneDataset

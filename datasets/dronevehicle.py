@@ -98,8 +98,8 @@ class DroneVehicleDataset(DetectionDataset):
                  ann_dirname: str | None = None,
                  thresholds: tuple[float, float] = DEFAULT_THRESHOLDS,
                  conditions_file: str | None = None, rebuild_cache: bool = False,
-                 border: int = -1):
-        super().__init__(img_size, train, mosaic_prob)
+                 border: int = -1, scale_aug: float = 0.0):
+        super().__init__(img_size, train, mosaic_prob, scale_aug)
         assert modality in ("rgb", "ir"), "modality must be 'rgb' or 'ir'"
         self.root = Path(root)
         self.modality = modality

@@ -113,6 +113,46 @@ def mosaic4(samples: list[tuple[np.ndarray, np.ndarray, np.ndarray]], size: int 
     return canvas, boxes, labels
 
 
+def random_scale(img: np.ndarray, boxes: np.ndarray, ratio: float, pad_value: int = 114,
+                 min_side: float = 2.0, min_visible: float = 0.25):
+    """Scale jitter at a fixed canvas size: zoom by ``s ~ U(1 - ratio, 1 + ratio)``.
+
+    Zooming in crops a random window of the enlarged image; zooming out pastes the
+    shrunken image at a random position on a ``pad_value`` canvas -- the output keeps
+    the input's shape either way. Boxes follow; a box is kept if both sides are at
+    least ``min_side`` px after clipping and at least ``min_visible`` of it is still
+    inside the canvas. Returns ``(img, boxes, keep)`` with ``keep`` indexing the input
+    boxes, so labels can be filtered alongside. YOLO's ``scale=0.5`` is ``ratio=0.5``.
+    """
+    s = random.uniform(1.0 - ratio, 1.0 + ratio)
+    h, w = img.shape[:2]
+    nh, nw = max(int(round(h * s)), 1), max(int(round(w * s)), 1)
+    scaled = cv2.resize(img, (nw, nh), interpolation=cv2.INTER_LINEAR)
+    if s >= 1.0:
+        ox, oy = random.randint(0, nw - w), random.randint(0, nh - h)
+        out = np.ascontiguousarray(scaled[oy:oy + h, ox:ox + w])
+        dx, dy = -ox, -oy
+    else:
+        ox, oy = random.randint(0, w - nw), random.randint(0, h - nh)
+        out = np.full_like(img, pad_value)
+        out[oy:oy + nh, ox:ox + nw] = scaled
+        dx, dy = ox, oy
+    boxes = np.asarray(boxes, dtype=np.float32).reshape(-1, 4)
+    if not len(boxes):
+        return out, boxes, np.zeros(0, dtype=np.int64)
+    b = boxes * s
+    b[:, [0, 2]] += dx
+    b[:, [1, 3]] += dy
+    area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+    c = b.copy()
+    c[:, [0, 2]] = c[:, [0, 2]].clip(0, w)
+    c[:, [1, 3]] = c[:, [1, 3]].clip(0, h)
+    cw, ch = c[:, 2] - c[:, 0], c[:, 3] - c[:, 1]
+    keep = np.nonzero((cw >= min_side) & (ch >= min_side)
+                      & (cw * ch >= min_visible * np.maximum(area, 1e-6)))[0]
+    return out, c[keep], keep
+
+
 class Compose:
     def __init__(self, transforms: list):
         self.transforms = transforms

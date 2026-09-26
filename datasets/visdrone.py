@@ -36,8 +36,8 @@ class VisDroneDataset(DetectionDataset):
 
     def __init__(self, root: str, split: str = "train", img_size: int = 640,
                  train: bool = True, mosaic_prob: float = 0.5,
-                 ignore_mode: str = "mask", pad_value: int = 114):
-        super().__init__(img_size, train, mosaic_prob)
+                 ignore_mode: str = "mask", pad_value: int = 114, scale_aug: float = 0.0):
+        super().__init__(img_size, train, mosaic_prob, scale_aug)
         assert ignore_mode in ("mask", "drop")
         self.ignore_mode = ignore_mode
         self.pad_value = pad_value

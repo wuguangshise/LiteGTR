@@ -1,0 +1,8 @@
+# Screening candidate: scale jitter. Every training image is zoomed by U(0.5, 1.5)
+# after mosaic / letterbox (datasets/transforms.py random_scale) -- YOLO's scale=0.5.
+# Zooming in gives tiny objects more pixels to learn from; zooming out makes them
+# smaller still, so AP_vt is the metric to watch. Recipe item: if adopted, every model
+# and baseline trains with it (train_litegtr.py SCALE_AUG).
+_base_: [../models/model_main.yaml]
+data:
+  scale_aug: 0.5

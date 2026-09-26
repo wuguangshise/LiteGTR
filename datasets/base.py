@@ -19,7 +19,7 @@ cv2.setNumThreads(0)
 cv2.ocl.setUseOpenCL(False)
 
 from datasets.transforms import (LetterBox, build_train_transforms, build_val_transforms,
-                                 mosaic4)
+                                 mosaic4, random_scale)
 
 
 class DetectionDataset(Dataset):
@@ -27,10 +27,14 @@ class DetectionDataset(Dataset):
 
     classes: list[str] = []
 
-    def __init__(self, img_size: int = 640, train: bool = True, mosaic_prob: float = 0.5):
+    def __init__(self, img_size: int = 640, train: bool = True, mosaic_prob: float = 0.5,
+                 scale_aug: float = 0.0):
         self.img_size = img_size
         self.train = train
         self.mosaic_prob = mosaic_prob if train else 0.0
+        # scale jitter U(1 - scale_aug, 1 + scale_aug) after mosaic / letterbox; 0 = off.
+        # Stays on when mosaic is closed for the final epochs, as in YOLO.
+        self.scale_aug = scale_aug if train else 0.0
         self.tf = build_train_transforms(img_size) if train else build_val_transforms(img_size)
         # mosaic already emits an img_size canvas, so the letterbox step is skipped
         # for that branch -- everything else in the chain still applies.
@@ -68,6 +72,10 @@ class DetectionDataset(Dataset):
             if n_before and len(boxes):
                 keep = (boxes[:, 2] - boxes[:, 0] > 1) & (boxes[:, 3] - boxes[:, 1] > 1)
                 boxes, labels = boxes[keep], labels[keep]
+
+        if self.scale_aug > 0:
+            img, boxes, keep = random_scale(img, boxes, self.scale_aug)
+            labels = np.asarray(labels).reshape(-1)[keep]
 
         img = np.ascontiguousarray(img[:, :, ::-1].transpose(2, 0, 1))  # BGR->RGB, HWC->CHW
         tensor = torch.from_numpy(img).float().div_(255.0)

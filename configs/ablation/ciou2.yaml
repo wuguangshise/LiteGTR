@@ -1,0 +1,7 @@
+# Screening candidate: CIoU weight back to 2.0, NWD kept at 1.0 as an extra term.
+# The CIoU 1.0 + NWD 1.0 recipe halved the IoU term; NWD barely penalises a few-pixel
+# offset, so boxes are found (AP50 up) but not tightened (AP_S, averaged over IoU
+# 0.5-0.95, flat). Recipe item: if adopted, every model and baseline trains with it.
+_base_: [../models/model_main.yaml]
+loss:
+  iou_weight: 2.0
