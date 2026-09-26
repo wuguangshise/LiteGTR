@@ -5,7 +5,7 @@ train:
   optimizer: adamw
   lr: 0.001
   weight_decay: 0.05
-  warmup_epochs: 3
+  warmup_epochs: 5         # linear warmup; YOLO uses 3, RemDet 10 -- from scratch at batch 8, a longer ramp
   # FlatCosine (DEIM, CVPR 2025): hold the peak LR for about half the run, then
   # cosine-decay. Helps most when training from scratch.
   scheduler: flat_cosine    # flat_cosine | cosine
