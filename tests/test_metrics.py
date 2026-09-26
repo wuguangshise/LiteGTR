@@ -1,4 +1,4 @@
-"""The evaluation protocol: original pixels, 1000 detections per image, AI-TOD buckets."""
+"""The evaluation protocol: original pixels, top 100 detections per image, AI-TOD buckets."""
 import numpy as np
 import pytest
 
@@ -11,12 +11,14 @@ def _grid(n, size=10.0, step=20.0):
     return np.hstack([xy, xy + size])
 
 
-def test_more_than_100_detections_per_image_count():
-    """pycocotools' default maxDets=100 would cap recall at 100/150 here."""
+def test_only_the_top_100_detections_per_image_count():
+    """As RemDet / LEAF-YOLO / D-FINE: 150 perfect boxes, only 100 scored -> recall 100/150."""
     gt = _grid(150)
     m = COCOMeanAP(["a"])
     m.add(0, 1000, 1000, "day", gt, np.zeros(150), gt, np.linspace(0.9, 0.5, 150), np.zeros(150))
-    assert m.evaluate()["mAP50"] == pytest.approx(1.0, abs=1e-3)
+    r = m.evaluate()
+    for k in ("mAP50", "mAP50_95", "AP_small"):
+        assert r[k] < 0.7, k                 # capped well below 1.0 by the 100-box limit
 
 
 def test_size_buckets_and_aitod_ranges():

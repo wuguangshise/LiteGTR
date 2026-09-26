@@ -153,7 +153,7 @@ def main() -> None:
 
     loader = DataLoader(ds, batch_size=a.batch, shuffle=False, collate_fn=collate_fn, num_workers=0)
     stal = float(cfg.get("assigner", {}).get("stal_size", 0) or 8)
-    max_det = int((cfg.get("test") or {}).get("max_det", 1000))
+    max_det = int((cfg.get("test") or {}).get("max_det", 300))
     cov_n = np.zeros(len(SIZE_BINS)); miss_plain = np.zeros(len(SIZE_BINS)); miss_stal = np.zeros(len(SIZE_BINS))
     cache = []                                  # per image: candidate scores/boxes + GT
     for images, targets in loader:

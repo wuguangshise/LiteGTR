@@ -13,11 +13,13 @@ import numpy as np
 
 KEYS = ("mAP50_95", "mAP50", "mAP75", "AP_small", "AP_medium", "AP_large", "AP_vt", "AP_t")
 
-# MMDetection's CocoMetric default, proposal_nums=(100, 300, 1000). The COCO API
-# computes AP over the top 100 detections per image and AP50 / AP75 / the size
-# buckets over the last value, 1000; pycocotools' own default (1, 10, 100) would
-# cap those at 100 and drop correct detections on dense VisDrone images.
-MAX_DETS = [100, 300, 1000]
+# Every metric counts the top 100 detections per image -- the protocol of the
+# numbers we compare with: RemDet's VisDrone config sets CocoMetric
+# proposal_nums=(100, 1, 10) (config_remdet/remdet/remdet_s-300e_visdrone.py),
+# and LEAF-YOLO / D-FINE report pycocotools' default (1, 10, 100). MMDetection's
+# own default (100, 300, 1000) would score AP50 / AP75 / the size buckets over
+# 1000 boxes -- looser than the papers, and inflating AP on dense VisDrone images.
+MAX_DETS = [1, 10, 100]
 # COCO buckets (small < 32^2 <= medium < 96^2 <= large) plus AI-TOD's
 # very tiny (2-8 px) and tiny (8-16 px), all in ORIGINAL-image pixels.
 AREA_RNG = [[0, 1e10], [0, 32 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e10],
