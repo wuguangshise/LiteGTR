@@ -57,7 +57,7 @@ Protocol: see [Evaluation protocol](#evaluation-protocol).
 | UAV-DETR-R18 [2] | arXiv'25 | 20.5 | 64.3 | — | 29.8 | 48.8 | — | — | — | — |
 | FCOS w/ SET [5] | CVPR'25 | — | — | — | 21.9 | — | — | —<sup>f</sup> | 1.6 | 5.7 |
 | Cascade R-CNN w/ RFLA + SET [5] | CVPR'25 | — | — | — | 28.5 | — | — | —<sup>f</sup> | 5.2 | 13.5 |
-| *Trained and evaluated under our protocol*<sup>a</sup> | | | | | | | | | | |
+| *Trained with each method's official repository*<sup>a</sup> | | | | | | | | | | |
 | YOLOv8n | Ultralytics | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | YOLO11n | Ultralytics | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | RemDet-Tiny | AAAI'25 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -65,9 +65,10 @@ Protocol: see [Evaluation protocol](#evaluation-protocol).
 | **LiteGTR-Edge-S (ours)** | — | 1.22<sup>c</sup> | 5.1<sup>c</sup> | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | **LiteGTR (ours)** | — | 2.32<sup>c</sup> | 10.1<sup>c</sup> | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 
-<sup>a</sup> Same data, 640 input and evaluation code (predictions are scored by this
-repository's evaluator). Batch 8. YOLO and RemDet are trained from scratch for 200
-epochs, like LiteGTR. Params and GFLOPs are measured by us at 640 with VisDrone's 10
+<sup>a</sup> Each method is trained and evaluated with its authors' official repository,
+on the same data at 640 input. YOLO and RemDet are trained from scratch for 200
+epochs, like LiteGTR; LiteGTR is evaluated as described in
+[Evaluation protocol](#evaluation-protocol). Params and GFLOPs are measured by us at 640 with VisDrone's 10
 classes; latency is TensorRT FP16, batch 1, on one GPU (to be named).
 <sup>b</sup> DEIM is trained with its official recipe and ImageNet-pretrained HGNetv2
 backbone; DETR-style models train poorly from scratch. LiteGTR uses no pretraining.
@@ -92,7 +93,7 @@ Mean object size ≈ 12.7 px. Only the key metrics are listed.
 | NWD-RKA [4] | ISPRS'22 | 23.4 | 53.5 | 8.7 | 23.8 |
 | DINO-DETR [4] | ICLR'23 | 25.9 | 61.3 | 12.7 | 25.3 |
 | DQ-DETR [4] | ECCV'24 | 30.5 | 69.2 | 15.2 | 30.9 |
-| *Trained and evaluated under our protocol*<sup>a</sup> | | | | | |
+| *Trained with each method's official repository*<sup>a</sup> | | | | | |
 | YOLOv8n | Ultralytics | TBD | TBD | TBD | TBD |
 | YOLO11n | Ultralytics | TBD | TBD | TBD | TBD |
 | RemDet-Tiny | AAAI'25 | TBD | TBD | TBD | TBD |
