@@ -181,8 +181,10 @@ python run_experiments.py                # run them all, in order
 > Checkpoints from before this change do not load into the current model, and
 > `run_experiments.py` reports their run directories as conflicts.
 >
-> The training recipe is batch 8 and mosaic probability 1.0 (Ultralytics' default),
-> in both `train_litegtr.py` and `configs/`. Every run in a comparison -- main,
+> The training recipe is batch 8, mosaic probability 1.0 and scale jitter U(0.5, 1.5)
+> (Ultralytics' defaults), with a CIoU 2.0 + NWD 1.0 box loss, in both `train_litegtr.py`
+> and `configs/`. `configs/ablation/no_scale_aug.yaml` and `ciou1.yaml` switch the two
+> latest recipe changes off. Every run in a comparison -- main,
 > ablations, baselines -- must use the same values.
 
 ## Evaluation protocol

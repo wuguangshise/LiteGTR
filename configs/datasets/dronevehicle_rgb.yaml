@@ -21,3 +21,4 @@ data:
   # rebuild_cache: true      # force a re-parse after editing annotations
   img_size: 640
   mosaic_prob: 1.0        # every training image (Ultralytics YOLO default mosaic=1.0)
+  scale_aug: 0.5          # zoom U(0.5, 1.5) after mosaic (YOLO scale=0.5); 0 = off

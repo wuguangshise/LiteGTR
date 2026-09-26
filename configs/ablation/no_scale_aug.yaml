@@ -1,0 +1,6 @@
+# Recipe ablation: the default recipe zooms every training image by U(0.5, 1.5)
+# (train_litegtr.py SCALE_AUG, datasets/transforms.py random_scale). This turns it
+# off, everything else unchanged -- how much of AP_S the scale jitter buys.
+_base_: [../models/model_main.yaml]
+data:
+  scale_aug: 0.0

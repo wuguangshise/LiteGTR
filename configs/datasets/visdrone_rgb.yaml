@@ -6,6 +6,7 @@ data:
   test_split: VisDrone2019-DET-test-dev
   img_size: 640
   mosaic_prob: 1.0        # every training image (Ultralytics YOLO default mosaic=1.0)
+  scale_aug: 0.5          # zoom U(0.5, 1.5) after mosaic (YOLO scale=0.5); 0 = off
   ignore_mode: mask       # training: class 0 regions are painted out, class 11 dropped
   eval_ignore_mode: drop  # evaluation: image untouched, class 0/11 annotations dropped --
                           # the COCO-json protocol of RemDet / mmdet VisDrone results

@@ -1,4 +1,5 @@
-"""Scale jitter (datasets/transforms.py random_scale) and the CIoU-2.0 candidate."""
+"""Scale jitter (datasets/transforms.py random_scale) and the CIoU 2.0 box loss --
+both part of the default recipe -- with their off-switch ablations."""
 import random
 
 import numpy as np
@@ -83,25 +84,29 @@ def test_off_by_default_and_never_at_evaluation():
     assert _Fake(img_size=128, train=False, scale_aug=0.5).scale_aug == 0.0
 
 
-def test_default_recipe_leaves_it_off():
+def test_default_recipe_uses_both():
     import train_litegtr as T
 
-    assert T.SCALE_AUG == 0.0
-    assert "scale_aug" not in load_config("configs/models/model_main.yaml").get("data", {})
-
-
-def test_screening_configs_change_one_thing_each():
+    assert T.SCALE_AUG == 0.5
     main = load_config("configs/models/model_main.yaml")
-    sa = load_config("configs/ablation/scale_aug.yaml")
-    c2 = load_config("configs/ablation/ciou2.yaml")
-    assert sa["data"]["scale_aug"] == 0.5
-    assert sa["model"] == main["model"] and sa["loss"] == main["loss"]
-    assert c2["model"] == main["model"]
-    assert {k: v for k, v in c2["loss"].items() if k != "iou_weight"} == \
+    assert (main["loss"]["iou_type"], main["loss"]["iou_weight"], main["loss"]["nwd_weight"]) == \
+        ("ciou", 2.0, 1.0)
+    for ds in ("configs/datasets/visdrone_rgb.yaml", "configs/datasets/dronevehicle_rgb.yaml"):
+        assert load_config(ds)["data"]["scale_aug"] == 0.5        # tools/train.py path agrees
+
+
+def test_off_switch_configs_change_one_thing_each():
+    main = load_config("configs/models/model_main.yaml")
+    no_sa = load_config("configs/ablation/no_scale_aug.yaml")
+    c1 = load_config("configs/ablation/ciou1.yaml")
+    assert no_sa["data"]["scale_aug"] == 0.0
+    assert no_sa["model"] == main["model"] and no_sa["loss"] == main["loss"]
+    assert c1["model"] == main["model"] and "data" not in c1
+    assert {k: v for k, v in c1["loss"].items() if k != "iou_weight"} == \
         {k: v for k, v in main["loss"].items() if k != "iou_weight"}
-    c2["model"]["num_classes"] = 10
-    m = build_model(c2)
-    assert m.iou_type == "ciou" and m.box_iou.loss_weight == 2.0 and m.nwd.loss_weight == 1.0
+    c1["model"]["num_classes"] = 10
+    m = build_model(c1)
+    assert m.box_iou.loss_weight == 1.0 and m.nwd.loss_weight == 1.0
 
 
 def test_yaml_path_passes_it_to_the_dataset(tmp_path):
@@ -110,6 +115,8 @@ def test_yaml_path_passes_it_to_the_dataset(tmp_path):
     (root / "annotations").mkdir()
     import cv2
     cv2.imwrite(str(root / "images" / "a.jpg"), np.zeros((64, 64, 3), np.uint8))
-    cfg = load_config("configs/datasets/visdrone_rgb.yaml", "configs/ablation/scale_aug.yaml")
+    cfg = load_config("configs/datasets/visdrone_rgb.yaml", "configs/ablation/no_scale_aug.yaml")
     cfg["data"]["root"] = str(tmp_path)
+    assert build_dataset(cfg, "train", True).scale_aug == 0.0          # the ablation wins
+    cfg["data"]["scale_aug"] = 0.5
     assert build_dataset(cfg, "train", True).scale_aug == 0.5

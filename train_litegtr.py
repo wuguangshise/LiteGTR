@@ -99,8 +99,8 @@ EMA_DECAY = 0.9999
 
 # 数据增强
 MOSAIC_PROB = 1.0        # 每张训练图都做 mosaic（Ultralytics YOLO 默认 mosaic=1.0）
-SCALE_AUG = 0.0          # 随机缩放 U(1-x, 1+x)，0 = 关；YOLO 默认 0.5。模型配置里写了
-                         # data.scale_aug 时以配置为准（configs/ablation/scale_aug.yaml）
+SCALE_AUG = 0.5          # 随机缩放 U(1-x, 1+x)，0 = 关；和 YOLO 默认 scale=0.5 一致。模型配置里
+                         # 写了 data.scale_aug 时以配置为准（configs/ablation/no_scale_aug.yaml）
 NO_AUG_EPOCHS = max(10, EPOCHS // 20)  # 最后约 5% 关 mosaic，至少 10 轮（YOLO close_mosaic=10）
 
 # Token 预算（None = 用模型配置里的值）
