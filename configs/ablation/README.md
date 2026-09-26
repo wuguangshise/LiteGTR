@@ -70,27 +70,37 @@ NAME = "abl_no_global_token"      # 每个实验换一个名字，否则会覆�
 
 **训练配方（学习率、调度、轮数、batch）所有实验必须完全一致**，否则差值里混进了配方的影响。
 
-## P2 候选：全局上下文 × 细节增强（2×2）
+## P2 候选：全局上下文 × 细节注入（2×2）
 
 不属于上面 5 个消融，而是候选的主模型改进，都针对 P2（2–8 px 目标在这一层检测）：
 
-| 配置 | P2 得到全局上下文 | P2 做细节增强 |
+| 配置 | P2 得到全局上下文 | P2 做细节注入 |
 |---|---|---|
 | `models/model_main.yaml` | — | — |
 | `writeback_p2.yaml` | ✓ | — |
-| `detail_enhance.yaml` | — | ✓ |
-| `writeback_p2_detail_enhance.yaml` | ✓ | ✓ |
+| `detail_inject.yaml` | — | ✓ |
+| `writeback_p2_detail_inject.yaml` | ✓ | ✓ |
 
-细节增强（`models/token/detail_enhance.py`）：用 P3 的路由打分图做软掩码，只在可能有目标的地方
-放大 P2 的高频细节，`F' = F + α·M·(F − AvgPool3×3(F))`，α 每通道一个、初始化为 0。
-+64 参数，约 0.02G MACs。它的两个掩码消融：
+细节注入（`models/token/detail_inject.py`）：从 stem 第二个卷积**之前**取 stride 2 的特征，
+SpaceToDepth 后 1×1 卷积，在 P3 路由打分图标出目标的地方加回 P2：
+`P2 = P2 + γ·M·Conv1×1(SpaceToDepth(S))`，γ 每通道一个、初始化为 0。
+注入在 P2 的 local path 之前（`inject_at: before_local`），后面还有两层卷积来用它。
+约 4.2K 参数、0.1G MACs。
 
-- `detail_enhance_global.yaml`：全图增强，不用路由 —— 若和 `detail_enhance` 一样好，增益来自高频本身，不是路由
-- `detail_enhance_token.yaml`：只在 56 个 token 处增强（硬掩码）—— 覆盖的目标少得多
+为什么从 stem 取：`tools/analyze_p2_info.py` 用线性探针测 P2 通路上每一步还剩多少目标细节，
+stem s2 → C2 → lat(C2) → FPN 后 P2 → 进 head 的 P2 依次是 0.99 → 0.85 → 0.82 → 0.44 → 0.34
+（VisDrone val，初始化权重），细节主要丢在 stem 的第二个卷积和 FPN 相加。之前的
+`detail_enhance.yaml` 放大的是进 head 前的 P2 自己的高频 —— 取源处正是细节最少的点，
+补不回已经丢掉的东西。
+
+为什么要路由掩码：目标框只占图像 5.9%，却有全图 26.7% 的高频能量；GT 中心热图（打分器的
+监督目标，M > 0.3）用 5.1% 的面积覆盖 80% 的小目标 P2 格子。对照：
+
+- `detail_inject_global.yaml`：全图注入，不用路由 —— 若和 `detail_inject` 一样好，增益来自早期细节本身，不是路由
 
 四格里 ✓✓ 的增益大于两个单项之和，才说明"一次路由，两处受益"。
-`train_candidates.py` 依次训练前两个候选（`cand_writeback_p2`、`cand_detail_enhance`），
-在里面的 `CANDIDATES` 换成别的配置即可训练其余几个。
+`train_candidates.py` 依次训练 `cand_detail_inject` 和 `cand_writeback_p2_detail_inject`，
+`main` 和 `cand_writeback_p2` 用已经训好的做对照。
 
 ## 需要别的消融时
 

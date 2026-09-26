@@ -31,6 +31,7 @@ from models.backbone.builder import build_backbone
 from models.head.gfl_head import GFLHead
 from models.neck.pyramid_projection import LocalCNNPath, PyramidProjection
 from models.token.detail_enhance import RoutedDetailEnhance
+from models.token.detail_inject import INJECT_AT, RoutedDetailInject
 from models.token.ema_token_router import EMATokenRouter, bn_batch_stats_only, photometric_view
 from models.token.geometric_writeback import MultiLevelWriteback
 from models.token.token_mixer import TokenMixer
@@ -110,6 +111,29 @@ class LiteGTR(nn.Module):
                 dim, [lv for lv in de.get("levels", ["P2"]) if lv in self.levels],
                 mask=mask, source=source, dilate=de.get("dilate", 3))
 
+        # Routed detail injection (models/token/detail_inject.py): stride-2 stem detail
+        # let back into P2 where the routing score map says objects are. Absent = off.
+        di = mc.get("detail_inject", {}) or {}
+        self.detail_inject = None
+        self.inject_at = di.get("inject_at", "before_local")
+        if di.get("enabled", False):
+            mask = di.get("mask", "score")
+            if not self.use_p2:
+                raise ValueError("detail_inject writes into P2; it needs use_p2")
+            if mask != "global" and not self.use_token:
+                raise ValueError("detail_inject.mask 'score' needs the token path; use 'global'")
+            source = di.get("source", "P3")
+            if mask == "score" and source not in self.token_levels:
+                raise ValueError(f"detail_inject.source {source!r} is not a token level {self.token_levels}")
+            if self.inject_at not in INJECT_AT:
+                raise ValueError(f"unknown detail_inject.inject_at {self.inject_at!r} (expected one of {INJECT_AT})")
+            src = getattr(self.backbone, "stem_mid_channels", None)
+            if src is None:
+                raise ValueError("detail_inject needs the TinyNeXt conv stem (backbone.stem: conv)")
+            self.detail_inject = RoutedDetailInject(src, dim, mask=mask, source=source,
+                                                    dilate=di.get("dilate", 3),
+                                                    detach_mask=di.get("detach_mask", True))
+
         hd = mc["head"]
         self.head = GFLHead(self.num_classes, dim, strides=self.strides,
                             stacked_convs=hd.get("stacked_convs", 2),
@@ -138,10 +162,21 @@ class LiteGTR(nn.Module):
 
     # ------------------------------------------------------------------ core
     def extract_feats(self, images: torch.Tensor) -> list[torch.Tensor]:
-        feats = self.neck(self.backbone(images))
-        if self.local_path is not None:
-            feats = self.local_path(feats)
+        stem_s2 = None
+        if self.detail_inject is not None:
+            c, stem_s2 = self.backbone(images, return_stem=True)
+            feats = self.neck(c)
+        else:
+            feats = self.neck(self.backbone(images))
         fmap = dict(zip(self.levels, feats))
+        # Routed detail injection before P2's local path: the routing map it needs comes
+        # from the selector, so P2's local path waits for it. The local path is per level,
+        # so running P2's later changes nothing else.
+        late = "P2" if self.detail_inject is not None and self.inject_at == "before_local" else None
+        if self.local_path is not None:
+            for i, lv in enumerate(self.levels):
+                if lv != late:
+                    fmap[lv] = self.local_path.paths[i](fmap[lv])
 
         self._last_student_maps = self._last_teacher_maps = None
         score_maps = coords = None
@@ -153,8 +188,15 @@ class LiteGTR(nn.Module):
                 self._last_teacher_maps = self.ema_router.teacher_score_maps(
                     self._teacher_inputs(images, tok_in))
             mixed = self.mixer(sel["tokens"], sel["coords"], sel["level_ids"])
-            fmap = self.writeback(fmap, mixed, sel["coords"])
             score_maps, coords = sel["score_maps"], sel["coords"]
+        if late is not None:
+            fmap["P2"] = self.detail_inject(fmap["P2"], stem_s2, score_maps)
+            if self.local_path is not None:
+                fmap["P2"] = self.local_path.paths[self.levels.index("P2")](fmap["P2"])
+        if self.use_token:
+            fmap = self.writeback(fmap, mixed, coords)
+        if self.detail_inject is not None and late is None:
+            fmap["P2"] = self.detail_inject(fmap["P2"], stem_s2, score_maps)
         if self.detail_enhance is not None:
             fmap = self.detail_enhance(fmap, score_maps, coords)
         return [fmap[lv] for lv in self.levels]

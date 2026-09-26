@@ -18,8 +18,8 @@ a single-modality (RGB) detector for edge deployment.
 
 > **Figure status.** This diagram shows an earlier design and will be redrawn once the
 > final architecture is fixed by the experiments. Not yet shown: the overlapping conv
-> stem (`backbone.stem: conv`), routed detail enhancement on P2
-> (`models/token/detail_enhance.py`) and, if adopted, the global-token writeback into P2
+> stem (`backbone.stem: conv`), routed detail injection into P2
+> (`models/token/detail_inject.py`) and, if adopted, the global-token writeback into P2
 > (`writeback_p2`). The text below and the configs describe the current code.
 > 结构图为早期版本，最终结构由实验确定后会重新绘制；文字说明和配置文件以当前代码为准。
 
@@ -106,18 +106,20 @@ backbone, roughly 10–20× LiteGTR's parameters. SET [5] is not listed: it repo
 the original AI-TOD (v1) only, whose annotations differ from AI-TOD-v2; it is compared
 on VisDrone in Table 1 instead.
 
-### Table 3 — Where to sharpen: routed detail restoration (core ablation)
+### Table 3 — Where P2 detail comes from: routed detail injection (core ablation)
 
-Final model with each P2 variant; configs in `configs/ablation/`.
+Final model with each P2 variant; configs in `configs/ablation/`. Detail injection lets the
+stride-2 stem activation -- taken before the stem's second conv -- back into P2 where the
+routing score map says an object is (`models/token/detail_inject.py`).
 
-| Detail enhancement on P2 | Global context into P2 | Config | VisDrone AP | VisDrone AP<sub>vt</sub> | VisDrone AP<sub>t</sub> | AI-TOD-v2 AP | AI-TOD-v2 AP<sub>vt</sub> |
+| Detail on P2 | Global context into P2 | Config | VisDrone AP | VisDrone AP<sub>vt</sub> | VisDrone AP<sub>t</sub> | AI-TOD-v2 AP | AI-TOD-v2 AP<sub>vt</sub> |
 |---|:---:|---|---:|---:|---:|---:|---:|
 | none | | `model_main` | TBD | TBD | TBD | TBD | TBD |
-| everywhere (no routing) | | `detail_enhance_global` | TBD | TBD | TBD | TBD | TBD |
-| at the 56 tokens (hard mask) | | `detail_enhance_token` | TBD | TBD | TBD | — | — |
-| **routed (score-map soft mask)** | | `detail_enhance` | TBD | TBD | TBD | TBD | TBD |
+| sharpen P2 itself, routed | | `detail_enhance` | TBD | TBD | TBD | — | — |
+| inject stem detail everywhere (no routing) | | `detail_inject_global` | TBD | TBD | TBD | TBD | TBD |
+| **inject stem detail, routed** | | `detail_inject` | TBD | TBD | TBD | TBD | TBD |
 | none | ✓ | `writeback_p2` | TBD | TBD | TBD | — | — |
-| **routed (score-map soft mask)** | ✓ | `writeback_p2_detail_enhance` | TBD | TBD | TBD | — | — |
+| **inject stem detail, routed** | ✓ | `writeback_p2_detail_inject` | TBD | TBD | TBD | — | — |
 
 Key rows are the mean ± std of 3 seeds (TBD); "—" = not run on that dataset.
 

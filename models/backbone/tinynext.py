@@ -123,6 +123,8 @@ class TinyNeXt(nn.Module):
 
         if stem == "conv":
             self.stem = conv_stem(in_ch, channels[0])
+            # width of the stride-2 activation inside the stem (models/token/detail_inject.py)
+            self.stem_mid_channels = self.stem[0].out_channels
         else:
             self.stem = nn.Sequential(
                 nn.Conv2d(in_ch, channels[0], 4, stride=4), LayerNorm2d(channels[0])
@@ -151,16 +153,24 @@ class TinyNeXt(nn.Module):
             if m.bias is not None:
                 nn.init.zeros_(m.bias)
 
-    def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
+    def forward(self, x: torch.Tensor, return_stem: bool = False):
+        """C2..C5; with ``return_stem`` also the stride-2 stem activation (conv stem
+        only) -- the last point where no 4x4 block has been compressed yet."""
         outs = []
-        x = self.stem(x)
+        if return_stem:
+            if self.stem_type != "conv":
+                raise ValueError("return_stem needs the conv stem (the patchify stem has no stride-2 stage)")
+            s2 = self.stem[:3](x)
+            x = self.stem[3:](s2)
+        else:
+            x = self.stem(x)
         for i in range(4):
             if i > 0:
                 x = self.downsamples[i - 1](x)
             x = self.stages[i](x)
             if i in self.out_indices:
                 outs.append(x)
-        return outs
+        return (outs, s2) if return_stem else outs
 
 
 def tinynext_m(**kw) -> TinyNeXt:

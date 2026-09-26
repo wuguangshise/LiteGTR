@@ -1,0 +1,6 @@
+# Both on P2: global context written into P2 (writeback_p2.yaml) AND routed detail
+# injection (detail_inject.yaml). With main, writeback_p2 and detail_inject a 2x2 --
+# context x detail on P2 -- testing whether one routing pays twice.
+_base_: [writeback_p2.yaml]
+model:
+  detail_inject: {enabled: true, mask: score, source: P3, dilate: 3, inject_at: before_local, detach_mask: true}

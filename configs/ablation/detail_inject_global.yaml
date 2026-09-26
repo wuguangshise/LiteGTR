@@ -1,0 +1,5 @@
+# Control of detail_inject.yaml: inject the stem detail into P2 EVERYWHERE, no routing.
+# If this does as well as the routed version, the gain is the early detail itself,
+# not the routing deciding where it goes.
+_base_: [detail_inject.yaml]
+model: {detail_inject: {mask: global}}

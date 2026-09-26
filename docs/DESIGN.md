@@ -331,6 +331,43 @@ top-k mask passes no gradient. `mask: global` and `mask: token` are the controls
 With `writeback_p2` it forms a 2x2 on P2 (context x detail); the paper claim
 "one routing, two gains" needs the combined gain to exceed the two single ones.
 
+**Outcome: no gain.** The source is the P2 that goes into the head -- the point on the
+P2 path with the least detail left (P0-8). Sharpening amplifies what survived; it cannot
+restore what the stem and the FPN already dropped. Superseded by P0-8; kept as a row of
+the P2 ablation table.
+
+### P0-8 Routed detail injection (candidate)
+`models/token/detail_inject.py`, `model.detail_inject` (default off),
+`configs/ablation/detail_inject*.yaml`, `writeback_p2_detail_inject.yaml`.
+
+Where P2 loses detail, measured with `tools/analyze_p2_info.py` (forward passes only:
+ridge probes from features to the high-pass of the 4x4x3 patch behind each stride-4
+cell, R^2 on held-out VisDrone sequences inside small-object boxes, initialised weights):
+
+| stem s2 | C2 | lat(C2) | P2 after FPN | P2 into head |
+|---|---|---|---|---|
+| 0.99 | 0.85 | 0.82 | 0.44 | 0.34 |
+
+Two drops: the stem's second stride-2 conv (64 values per cell -> 32 channels, then
+stage 1) and the FPN sum, where the upsampled P3 -- one value over a whole object for
+the 16% of objects under 8 px -- is added with the same weight as C2. Capacity is not
+the problem: the detail patch needs 17 dims for 99% of its energy (C2 has 32).
+
+So the source moves before both losses and the gate stays on the routing map:
+`P2 += gamma * M * Conv1x1(SpaceToDepth2x2(S))`, `S` the stride-2 stem activation,
+`M` the dilated sigmoid of the P3 score map (detached: the routing map stays what its
+supervision makes it), `gamma` per channel, zero-init. Adding the stem source to P2
+raises the probe R^2 by 0.65 (lat(C2): 0.48). The map exists only after the selector,
+so P2's local path is run after it and the injection lands before that local path
+(`inject_at: before_local`; `before_head` is the alternative). Local paths are per
+level, so nothing else changes and a disabled module is bit-identical to main.
+
+Why routed: object boxes are 5.9% of the image but hold 26.7% of its high-frequency
+energy (5.8x the background per pixel); the GT-centre map the scorer is trained towards
+covers 80% of the small-object P2 cells with 5.1% of the image (M > 0.3). A global
+injection would mostly add background texture -- `detail_inject_global` is that control.
+Cost at 640: ~4.2K params, ~0.1G MACs, static ONNX. Conv stem only.
+
 ## 3. P1 — paper-level decisions
 
 ### P1-6 Pretraining: unified protocol, not a ban

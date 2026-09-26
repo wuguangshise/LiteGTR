@@ -1,0 +1,15 @@
+# Candidate: routed detail injection into P2 (models/token/detail_inject.py).
+# P2 loses most of its tiny-object detail in the stem's 2nd stride-2 conv and in the
+# FPN sum (tools/analyze_p2_info.py). The stride-2 stem activation -- taken before that
+# conv -- is brought back into P2 where the P3 routing score map says an object is:
+#   P2 = P2 + gamma * M * Conv1x1(SpaceToDepth2x2(S)),  M = dilated sigmoid(S_P3)
+# gamma starts at 0 (identity at initialisation). Cost at 640: ~4.2K params, ~0.1G MACs.
+_base_: [../models/model_main.yaml]
+model:
+  detail_inject:
+    enabled: true
+    mask: score              # score (the design) | global (control: no routing)
+    source: P3               # score map that drives the mask (finest token level)
+    dilate: 3                # grow the mask so it covers object borders, not only centres
+    inject_at: before_local  # before P2's local path (2 convs to use it) | before_head
+    detach_mask: true        # routing map stays what its supervision makes it
