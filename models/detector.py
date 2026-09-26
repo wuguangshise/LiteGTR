@@ -148,7 +148,7 @@ class LiteGTR(nn.Module):
         iou_cls = {"ciou": CIoULoss, "giou": GIoULoss}[self.iou_type]
         self.box_iou = iou_cls(loss_weight=lc.get("iou_weight", lc.get("giou_weight", 2.0)))
         self.dfl = DistributionFocalLoss(loss_weight=lc.get("dfl_weight", 0.25))
-        # NWD box term next to the IoU term; on in the default recipe (configs/_base_/schedule.yaml), 0 = off
+        # NWD box term next to the IoU term; off in the default recipe (configs/ablation/ciou_nwd.yaml turns it on)
         nwd_w = lc.get("nwd_weight", 0.0)
         self.nwd = NWDLoss(constant=lc.get("nwd_constant", 12.8), loss_weight=nwd_w) if nwd_w > 0 else None
         self.token_consistency = TokenConsistencyLoss(

@@ -1,4 +1,4 @@
-"""Scale jitter (datasets/transforms.py random_scale) and the CIoU 2.0 box loss --
+"""Scale jitter (datasets/transforms.py random_scale) and the default box loss --
 both part of the default recipe -- with their off-switch ablations."""
 import random
 
@@ -90,7 +90,7 @@ def test_default_recipe_uses_both():
     assert T.SCALE_AUG == 0.5
     main = load_config("configs/models/model_main.yaml")
     assert (main["loss"]["iou_type"], main["loss"]["iou_weight"], main["loss"]["nwd_weight"]) == \
-        ("ciou", 2.0, 1.0)
+        ("giou", 2.0, 0.0)
     for ds in ("configs/datasets/visdrone_rgb.yaml", "configs/datasets/dronevehicle_rgb.yaml"):
         assert load_config(ds)["data"]["scale_aug"] == 0.5        # tools/train.py path agrees
 
@@ -98,15 +98,16 @@ def test_default_recipe_uses_both():
 def test_off_switch_configs_change_one_thing_each():
     main = load_config("configs/models/model_main.yaml")
     no_sa = load_config("configs/ablation/no_scale_aug.yaml")
-    c1 = load_config("configs/ablation/ciou1.yaml")
+    c1 = load_config("configs/ablation/ciou_nwd.yaml")
     assert no_sa["data"]["scale_aug"] == 0.0
     assert no_sa["model"] == main["model"] and no_sa["loss"] == main["loss"]
     assert c1["model"] == main["model"] and "data" not in c1
-    assert {k: v for k, v in c1["loss"].items() if k != "iou_weight"} == \
-        {k: v for k, v in main["loss"].items() if k != "iou_weight"}
+    changed = ("iou_type", "nwd_weight")
+    assert {k: v for k, v in c1["loss"].items() if k not in changed} == \
+        {k: v for k, v in main["loss"].items() if k not in changed}
     c1["model"]["num_classes"] = 10
     m = build_model(c1)
-    assert m.box_iou.loss_weight == 1.0 and m.nwd.loss_weight == 1.0
+    assert m.iou_type == "ciou" and m.box_iou.loss_weight == 2.0 and m.nwd.loss_weight == 1.0
 
 
 def test_yaml_path_passes_it_to_the_dataset(tmp_path):

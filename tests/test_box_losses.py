@@ -24,8 +24,20 @@ def test_nwd_gives_gradient_without_overlap():
 
 
 @pytest.mark.parametrize("path", ["configs/models/model_main.yaml", "configs/baselines/csp_n.yaml"])
-def test_every_model_trains_with_nwd(path):
+def test_every_model_trains_with_giou(path):
     cfg = load_config(path)
+    assert (cfg["loss"]["iou_type"], cfg["loss"]["iou_weight"], cfg["loss"]["nwd_weight"]) == ("giou", 2.0, 0.0)
+    cfg["model"]["num_classes"] = 10
+    model = build_model(cfg).train()
+    assert model.nwd is None
+    targets = [{"boxes": torch.tensor([[20.0, 20.0, 26.0, 26.0]]), "labels": torch.tensor([0])}]
+    losses = model.loss(torch.randn(1, 3, 128, 128), targets)
+    assert "loss_giou" in losses and "loss_ciou" not in losses and "loss_nwd" not in losses
+    assert torch.isfinite(losses["loss_giou"])
+
+
+def test_ciou_nwd_ablation_trains():
+    cfg = load_config("configs/ablation/ciou_nwd.yaml")
     assert cfg["loss"]["nwd_weight"] > 0 and cfg["loss"]["iou_type"] == "ciou"
     cfg["model"]["num_classes"] = 10
     model = build_model(cfg).train()

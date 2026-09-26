@@ -1,5 +1,0 @@
-# Recipe ablation: the default box loss is CIoU 2.0 + NWD 1.0. This is the earlier
-# CIoU 1.0 + NWD 1.0, which found more boxes (AP50) but did not tighten them (AP_S).
-_base_: [../models/model_main.yaml]
-loss:
-  iou_weight: 1.0

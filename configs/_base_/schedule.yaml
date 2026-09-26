@@ -27,10 +27,9 @@ train:
 
 loss:
   qfl_weight: 1.0
-  iou_type: ciou          # ciou | giou -- CIoU also pulls centres together when one box contains the other
-  iou_weight: 2.0         # box loss = CIoU 2.0 + NWD 1.0. With CIoU at 1.0, AP50 rose but AP_S
-                          # stayed flat: NWD finds boxes but barely tightens them
-  nwd_weight: 1.0         # NWD (losses/nwd.py): a pixel offset costs tiny and large boxes alike
+  iou_type: giou          # giou | ciou -- GIoU 2.0 is GFL's own box loss. CIoU 2.0 + NWD 1.0 was
+  iou_weight: 2.0         # tried and did worse; it is configs/ablation/ciou_nwd.yaml
+  nwd_weight: 0.0         # NWD (losses/nwd.py) next to the IoU term; 0 = off
   nwd_constant: 12.8      # NWD paper's C (AI-TOD mean object size); boxes in input pixels
   dfl_weight: 0.25
   token_weight: 0.5       # EMA routing consistency
