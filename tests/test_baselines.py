@@ -108,3 +108,10 @@ def test_environment_check_flags_versions_that_break_training():
     assert TB.version_warning("deim", "torch 2.5.1 torchvision 0.20.1+cu124 cuda True") == ""
     assert "numpy" in TB.version_warning("remdet", "mmcv 2.2.0 torch 2.2.0 numpy 2.4.6 cuda True")
     assert TB.version_warning("remdet", "mmcv 2.2.0 torch 2.2.0 numpy 1.26.4 cuda True") == ""
+
+
+def test_remdet_runs_its_own_mmdet_from_the_repository():
+    env = TB.env_for("remdet", "0")
+    assert env["PYTHONPATH"].split(__import__("os").pathsep)[0] == str(TB.THIRD_PARTY / "remdet")
+    assert "PYTHONPATH" not in TB.env_for("deim", "0") or \
+        str(TB.THIRD_PARTY / "remdet") not in TB.env_for("deim", "0")["PYTHONPATH"]

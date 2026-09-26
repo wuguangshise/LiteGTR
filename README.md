@@ -54,80 +54,60 @@ DEIM 用 faster-coco-eval。GT 都来自同一份标注，由 `prepare_visdrone.
 - 转换结果：YOLO 标签写到数据集各划分目录下的 `labels/`（和 `images/` 并列，ultralytics 规定的位置），
   COCO json 写到 `runs/baselines/data/`。原始 `annotations/` 不会被改动。
 
-## 环境（Windows + conda）
+## 环境（Windows + conda，4 个方法共用一个环境）
 
-三个框架的依赖互相冲突（RemDet 需要 torch 2.2 + mmcv 2.2.0），所以建三个 conda 环境。
-步骤来自各仓库官方 README，加上实际跑通时发现必须固定的版本（下面注明了原因）。
-下面的命令在 Anaconda Prompt 里、本仓库根目录下执行。
+配置文件在 `env/`：
 
-**先克隆两个官方仓库**（第一次运行 `train_baselines.py` 也会自动克隆；装环境要先有代码）：
+| 文件 | 作用 |
+|---|---|
+| `env/setup_env.bat` | 一键建环境：建 conda 环境 → 装 torch → 装 mmcv → 装其余依赖 → 检查 |
+| `env/requirements.txt` | 全部依赖，版本都固定成实际跑通 4 个方法时的版本 |
 
-```bash
-git clone https://github.com/HZAI-ZJNU/RemDet.git baselines/third_party/remdet
-git -C baselines/third_party/remdet checkout 8cf2667e9ff80122e89436a0ebc6558ff1cfdb93
-git clone https://github.com/ShihuaHuang95/DEIM.git baselines/third_party/deim
-git -C baselines/third_party/deim checkout 09d35d53d39ee3145a1e61e3a989b28b9468d1dd
+在 **Anaconda Prompt** 里、本仓库根目录下运行：
+
+```bat
+env\setup_env.bat
 ```
 
-**ultralytics**（可以直接用训练 LiteGTR 的环境，只需要再装 ultralytics）：
+它依次执行（出错会停下并提示）：
 
-```bash
-pip install ultralytics==8.4.163
+```bat
+conda create -n litegtr-baselines -y python=3.10
+conda activate litegtr-baselines
+pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu121
+pip install mmcv==2.1.0 --only-binary mmcv -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html
+pip install -r env\requirements.txt
 ```
 
-**RemDet**：
+为什么是这些版本（三个仓库要装进同一个环境，每一条都是必须的）：
 
-```bash
-conda create -n remdet -y python=3.11
-conda activate remdet
-pip install torch==2.2.0 torchvision==0.17.0 --index-url https://download.pytorch.org/whl/cu121
-cd baselines/third_party/remdet
-pip install -r requirements.txt
-pip install albumentations==1.4.4 timm
-pip install -U openmim
-mim install mmengine
-mim install mmcv==2.2.0
-pip install -v -e . --no-build-isolation
-pip install "numpy<2" "opencv-python<4.11"
-cd ../../..
+| 版本 | 原因 |
+|---|---|
+| torch 2.1.2 + cu121 | mmcv 带 CUDA 算子，必须和 torch 版本配套；torch 2.1 的 Windows 预编译 mmcv 最全 |
+| mmcv 2.1.0 | RemDet 自带的 mmdet 要求 `2.0.0rc4 <= mmcv < 2.2.1`；`--only-binary` 表示只装预编译包，不在本机编译 |
+| torchvision 0.16.2 | DEIM 的数据增强用的是 torchvision 旧接口，0.21 起会报 `NotImplementedError` |
+| numpy 1.26.4 | torch 2.1 是用 numpy 1.x 编译的，numpy 2 会报错 |
+| transformers 4.46.3 | DEIM 需要它；RemDet 的 mmdet 发现环境里有 transformers 就会导入，5.x 不支持 torch 2.1，导入时直接崩溃 |
+| Python 3.10 | 三个仓库都支持，Windows 预编译包覆盖最全 |
+
+RemDet 不需要 `pip install -e .`：它的 mmdet 是纯 Python，`train_baselines.py` 训练 RemDet 时
+把它的仓库目录加进 `PYTHONPATH`，效果相同。RemDet 和 DEIM 的官方仓库在第一次运行时自动克隆。
+
+显卡驱动要支持 CUDA 12.1（`nvidia-smi` 右上角 CUDA Version ≥ 12.1）。
+
+装好以后先检查：
+
+```bat
+conda activate litegtr-baselines
+python train_baselines.py --dry-run
 ```
 
-- `--no-build-isolation`：RemDet 的 setup.py 要 import torch，新版 pip 默认在隔离环境里构建，会找不到 torch。
-- 最后一行必须有：torch 2.2 是用 numpy 1.x 编译的，而上面的步骤会顺带装上 numpy 2，
-  训练时会报 `A module that was compiled using NumPy 1.x cannot be run in NumPy 2.x`。
-- `mim install mmcv==2.2.0` 会先找 OpenMMLab 的预编译包。如果它开始从源码编译
-  （输出里出现 `Building wheel for mmcv`，要十几分钟以上，而且需要 Visual Studio Build Tools 的 C++ 工具），
-  可以等它编完；装不上的话，RemDet 自带的 mmdet 也接受 mmcv 2.1.0，
-  换成 torch 2.1 + mmcv 2.1.0（Windows 预编译包更全）：
+每个方法一行版本信息；出现 `!!` 表示环境有问题。
 
-  ```bash
-  pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu121
-  mim install mmcv==2.1.0
-  ```
-
-**DEIM**：
-
-```bash
-conda create -n deim -y python=3.11.9
-conda activate deim
-pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124
-pip install -r baselines/third_party/deim/requirements.txt
-```
-
-- torchvision 必须是 0.20 或更早：DEIM 的数据增强实现的是 torchvision 旧的 `_transform` 接口，
-  0.21 起改名成 `transform`，新版本会在第一个 batch 报 `NotImplementedError`。
-  DEIM 的 requirements.txt 只写了 `torchvision>=0.15.2`，所以要先装好固定版本再装 requirements。
-- 显卡驱动较旧、不支持 CUDA 12.4 的话，把 `cu124` 换成 `cu121`（torch 2.5.1 两个都有）。
-
-装好后，把三个环境的 python 路径填进 `train_baselines.py` 顶部的 `PYTHON`：
-
-```python
-PYTHON = {
-    "ultralytics": r"C:\Users\<你>\anaconda3\envs\litegtr\python.exe",
-    "remdet":      r"C:\Users\<你>\anaconda3\envs\remdet\python.exe",
-    "deim":        r"C:\Users\<你>\anaconda3\envs\deim\python.exe",
-}
-```
+**如果 mmcv 那一步失败**（`No matching distribution found for mmcv==2.1.0`，说明 OpenMMLab 没有
+和你的 Python / CUDA 对应的预编译包）：打开
+https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html ，搜 `win_amd64`，看有哪些 `cp3xx`，
+按它把 `setup_env.bat` 里的 `python=3.10` 改成对应版本重来。还不行就用 WSL2（Linux 下这套环境已完整跑通）。
 
 ## 运行
 
@@ -145,6 +125,8 @@ python train_baselines.py              # 依次训练（PyCharm 里直接点运�
 ## 说明
 
 - RemDet 和 DEIM 的训练脚本总是使用第一块可见 GPU，所以 `DEVICE` 是通过 `CUDA_VISIBLE_DEVICES` 传过去的。
+- ultralytics 检测到环境里装了 albumentations（RemDet 需要它）时，会启用自己内置的几种轻微增强
+  （模糊、灰度、CLAHE 等，每种概率 1%）。这是 ultralytics 的默认行为，不需要处理。
 - DEIM 官方用 `torchrun` 启动。这里用 `run_deim.py` 在单进程里直接运行官方 `train.py`，不建进程组，
   DEIM 走它自带的单进程模式（不包 DDP、BN 不转 SyncBN）。单卡时这和 `torchrun --nproc_per_node=1`
   在数值上等价，而且不依赖 NCCL（Windows 版 PyTorch 没有 NCCL）。DEIM 仓库里的文件一个都不改。

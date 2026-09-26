@@ -1,0 +1,30 @@
+# 4 个对比方法共用的环境（Python 3.10）。由 env/setup_env.bat 调用。
+# torch、torchvision、mmcv 需要特定的下载源，setup_env.bat 会先装好它们；这里再写一遍版本，
+# 防止其他包把它们升级掉。所有版本都是实际跑通 4 个方法时用的版本。
+torch==2.1.2
+torchvision==0.16.2
+mmcv==2.1.0
+numpy==1.26.4
+opencv-python==4.10.0.84
+
+# YOLOv8n / YOLO11n
+ultralytics==8.4.163
+
+# RemDet（自带的 mmdet 的运行依赖 + RemDet README 额外要求的包）
+mmengine==0.10.7
+albumentations==1.4.4
+timm==1.0.30
+matplotlib==3.10.9
+pycocotools==2.0.11
+scipy==1.15.3
+shapely==2.1.2
+six==1.17.0
+terminaltables==3.1.10
+tqdm==4.70.1
+
+# DEIM（它的 requirements.txt）
+faster-coco-eval==1.8.0
+PyYAML==6.0.3
+tensorboard==2.21.0
+calflops==0.3.2
+transformers==4.46.3    # 5.x 不支持 torch 2.1：RemDet 的 mmdet 导入它时会崩溃

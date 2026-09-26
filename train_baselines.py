@@ -9,8 +9,7 @@
 其余超参数（优化器、学习率、增强、损失、评估）一律用各仓库的官方设置；batch 和官方不同时，
 按各仓库自己规定的方式缩放（见 baselines/configs.py）。
 
-每个方法用自己的 Python 环境（三套依赖互相冲突，见 README.md）：在下面的
-PYTHON 里填对应环境的 python.exe；留空 = 用运行本脚本的这个 Python。
+4 个方法共用一个 conda 环境（env/ 里的配置文件，见 README.md）：在这个环境里运行本脚本即可。
 
 第一次运行时：
   1. 把 RemDet、DEIM 的官方仓库克隆到 baselines/third_party/，并固定到下面记录的提交；
@@ -43,13 +42,6 @@ SEED = 0
 WORKERS = 8              # Windows 下若报多进程错误，改成 0
 DEVICE = "0"             # "0" / "cpu"
 
-# 各框架所在环境的 python 可执行文件；"" = 用运行本脚本的 Python
-PYTHON = {
-    "ultralytics": r"",      # 例：r"C:\Users\Administrator\anaconda3\envs\ultra\python.exe"
-    "remdet": r"",           # 例：r"C:\Users\Administrator\anaconda3\envs\remdet\python.exe"
-    "deim": r"",             # 例：r"C:\Users\Administrator\anaconda3\envs\deim\python.exe"
-}
-
 # (输出目录名, 框架, 模型) —— 按这个顺序依次训练；不想跑的在行首加 # 注释掉
 BASELINES = [
     ("yolov8n",     "ultralytics", "yolov8n.yaml"),
@@ -79,7 +71,8 @@ def recipe() -> dict:
 
 
 def python_for(framework: str) -> str:
-    return PYTHON.get(framework) or sys.executable
+    """All four methods share one environment: the Python running this script."""
+    return sys.executable
 
 
 def ensure_repo(name: str, fetch: bool = True) -> Path:
@@ -111,7 +104,10 @@ def check_env(framework: str) -> str:
                        "'cuda', torch.cuda.is_available())",
              "deim": "import torch, torchvision, faster_coco_eval; print('torch', torch.__version__, "
                      "'torchvision', torchvision.__version__, 'cuda', torch.cuda.is_available())"}[framework]
-    r = subprocess.run([python_for(framework), "-c", probe], capture_output=True, text=True)
+    if framework == "remdet" and not (THIRD_PARTY / "remdet").exists():
+        probe = probe.replace(" mmdet,", "")          # RemDet's mmdet comes with its repository
+    r = subprocess.run([python_for(framework), "-c", probe], capture_output=True, text=True,
+                       env=env_for(framework, "cpu"))
     if r.returncode:
         return "!! 环境不可用：" + (r.stderr.strip().splitlines() or ["?"])[-1]
     line = r.stdout.strip()
@@ -174,13 +170,17 @@ def command(name: str, framework: str, model: str, rc: dict, paths: dict,
 
 
 def env_for(framework: str, device) -> dict:
-    """RemDet (mmengine) and DEIM (DDP with device_ids=[rank]) always train on the first
-    visible GPU, so the GPU chosen by DEVICE is selected by CUDA_VISIBLE_DEVICES."""
+    """RemDet and DEIM always train on the first visible GPU, so the GPU chosen by DEVICE is
+    selected by CUDA_VISIBLE_DEVICES. RemDet ships its own modified mmdet (pure Python):
+    putting the repository on PYTHONPATH is what its `pip install -e .` would do."""
     import os
 
     env = dict(os.environ)
     if framework in REPOS:
         env["CUDA_VISIBLE_DEVICES"] = "" if str(device) == "cpu" else str(device)
+    if framework == "remdet":
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(THIRD_PARTY / "remdet")] + [x for x in [env.get("PYTHONPATH")] if x])
     return env
 
 
@@ -211,8 +211,9 @@ def main() -> int:
 
     args = (rc["data_root"], rc["train_split"], rc["val_split"], OUT / "data")
     paths = expected_paths(*args) if a.dry_run else prepare(*args)
+    print(f"环境 {sys.executable}")
     for fw in dict.fromkeys(b[1] for b in todo):
-        print(f"环境 {fw:12s} {python_for(fw)}\n{'':17s}{check_env(fw)}")
+        print(f"  {fw:12s} {check_env(fw)}")
     print("-" * 72)
 
     results = {}
