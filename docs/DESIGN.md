@@ -378,7 +378,7 @@ are painted with the letterbox pad value for training (`ignore_mode: mask`) but
 NOT for evaluation (`eval_ignore_mode: drop`).
 Metrics come from the **COCO API** on `val` with MMDetection's `CocoMetric`
 defaults: boxes in original-image pixels against the original annotations,
-`maxDets` 100/300/1000 (AP at the top 100, AP50/AP75 and the size buckets at 1000),
+the top 100 detections per image for every metric (RemDet's `proposal_nums=(100, 1, 10)`),
 COCO size buckets in original
 pixels, plus AI-TOD's AP_vt / AP_t. An earlier version scored in letterboxed
 640-px space with pycocotools' default 100 detections per image and painted

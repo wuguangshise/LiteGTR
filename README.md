@@ -198,18 +198,18 @@ All evaluation -- validation during training, `tools/val.py`, `tools/test.py` an
 |---|---|---|
 | `score_thr` | `0.001` | |
 | `nms_iou` | `0.7` | class-wise NMS |
-| `max_det` | `1000` | matches the metric's largest maxDets; dense VisDrone images exceed 300 |
+| `max_det` | `300` | as RemDet, LEAF-YOLO, D-FINE and Ultralytics |
 | `multi_label` | `true` | one location may output several classes (pedestrian *and* people) |
 | `agnostic` | `false` | class-agnostic NMS costs ~1.3 mAP on VisDrone |
 | `containment` | `null` | e.g. `0.8` drops a box ≥ 80 % covered by a higher-scoring one |
 
-Scoring follows MMDetection's `CocoMetric` with its default settings:
+Scoring follows RemDet's VisDrone evaluation (MMDetection's `CocoMetric`):
 
 | | |
 |---|---|
 | coordinates | predictions mapped back through the letterbox; GT = the original annotation, before resizing |
 | size buckets | COCO small < 32² ≤ medium < 96² ≤ large, in **original-image** pixels, plus AI-TOD's `AP_vt` (2–8 px) and `AP_t` (8–16 px) |
-| detections counted | `maxDets` 100/300/1000 (MMDetection's default): AP uses the top 100 per image, AP<sub>50</sub>, AP<sub>75</sub> and the size buckets the top 1000 |
+| detections counted | the top **100** per image for every metric, as RemDet (`proposal_nums=(100, 1, 10)`), LEAF-YOLO and D-FINE |
 | VisDrone ignore regions | painted out for training (`ignore_mode: mask`); evaluation images untouched (`eval_ignore_mode: drop`), as in a COCO-json evaluation |
 
 Numbers from before this protocol (input-space buckets, 100 detections per image,

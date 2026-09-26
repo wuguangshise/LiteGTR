@@ -11,7 +11,7 @@ Evaluation protocol (LOCKED -- docs/DESIGN.md P1-9)
   a COCO-json evaluation, as used by RemDet and the mmdet VisDrone results, sees
   the untouched image and has no ignore regions.
 * metrics are computed with **COCO API** (``datasets/metrics.py``) on ``val``, in
-  original-image pixels, up to 1000 detections per image (mmdet's CocoMetric).
+  original-image pixels, top 100 detections per image (RemDet's CocoMetric setting).
   The official MATLAB toolkit yields slightly different numbers; whichever you
   pick must be stated in the paper. Do not mix the two across tables.
 * ``test-dev`` requires online submission and is not used for ablations.
