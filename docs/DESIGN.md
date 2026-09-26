@@ -376,9 +376,10 @@ argument for a *fixed* budget — deployment friendliness, not just FLOP savings
 Class 11 `others` is dropped; classes 1–10 map to 0–9. Class 0 `ignored regions`
 are painted with the letterbox pad value for training (`ignore_mode: mask`) but
 NOT for evaluation (`eval_ignore_mode: drop`).
-Metrics come from the **COCO API** on `val`, matched to mmdet/mmyolo's
-`CocoMetric` (RemDet, AAAI'25): boxes in original-image pixels against the original
-annotations, `maxDets` 100/300/1000 (AP at 1000), COCO size buckets in original
+Metrics come from the **COCO API** on `val` with MMDetection's `CocoMetric`
+defaults: boxes in original-image pixels against the original annotations,
+`maxDets` 100/300/1000 (AP at the top 100, AP50/AP75 and the size buckets at 1000),
+COCO size buckets in original
 pixels, plus AI-TOD's AP_vt / AP_t. An earlier version scored in letterboxed
 640-px space with pycocotools' default 100 detections per image and painted
 validation images: buckets shifted by the resize factor (a "small" object at

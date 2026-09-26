@@ -13,11 +13,10 @@ import numpy as np
 
 KEYS = ("mAP50_95", "mAP50", "mAP75", "AP_small", "AP_medium", "AP_large", "AP_vt", "AP_t")
 
-# Up to 1000 detections per image count, as in mmdet/mmyolo's CocoMetric
-# (proposal_nums=(100, 300, 1000); COCO's AP uses the last) -- the protocol of
-# RemDet and the other VisDrone papers we compare with. pycocotools' default of
-# 100 silently drops correct detections on the many VisDrone images with more
-# than 100 objects.
+# MMDetection's CocoMetric default, proposal_nums=(100, 300, 1000). The COCO API
+# computes AP over the top 100 detections per image and AP50 / AP75 / the size
+# buckets over the last value, 1000; pycocotools' own default (1, 10, 100) would
+# cap those at 100 and drop correct detections on dense VisDrone images.
 MAX_DETS = [100, 300, 1000]
 # COCO buckets (small < 32^2 <= medium < 96^2 <= large) plus AI-TOD's
 # very tiny (2-8 px) and tiny (8-16 px), all in ORIGINAL-image pixels.
