@@ -53,7 +53,11 @@ class LiteGTR(nn.Module):
         self.backbone = build_backbone(mc["backbone"], self.use_p2)
 
         dim = mc["neck"]["channels"]
-        self.neck = PyramidProjection(self.backbone.out_channels, dim, use_fpn=mc["neck"].get("use_fpn", True))
+        p2_fusion = mc["neck"].get("p2_fusion", "add")
+        if p2_fusion != "add" and not self.use_p2:
+            raise ValueError("neck.p2_fusion changes the P3 -> P2 merge; it needs use_p2")
+        self.neck = PyramidProjection(self.backbone.out_channels, dim, use_fpn=mc["neck"].get("use_fpn", True),
+                                      p2_fusion=p2_fusion)
         self.local_path = (LocalCNNPath(dim, len(self.levels), strides=self.strides)
                            if mc.get("use_local_cnn", True) else None)
 

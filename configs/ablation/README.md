@@ -102,6 +102,21 @@ stem s2 → C2 → lat(C2) → FPN 后 P2 → 进 head 的 P2 依次是 0.99 →
 `train_candidates.py` 先训练两个确定新 main：`cand_writeback_p2_detail_inject`，再
 `cand_writeback_p2`（两者只差细节注入）。`main` 和 `cand_detail_inject` 以后作为消融补齐四格。
 
+## 主干候选：容量挪到高分辨率 + 带权 P2 融合
+
+现在的 TinyNeXt `[32,64,128,192] x [2,4,8,2]` 把 91% 的主干参数放在 stride 16/32，而 VisDrone
+54% 的目标小于 16 px，在这两层上不到一个格子。两个候选都在 `writeback_p2_detail_inject.yaml`
+之上，P3 -> P2 改成带权相加（`neck.p2_fusion: weighted`，BiFPN 的 fast normalized fusion，
+每通道一对权重），只差主干：
+
+| 配置 | 通道 | 深度 | stride 4/8 占主干参数 | 参数 | MACs（640） |
+|---|---|---|---|---|---|
+| main + 写回 P2 + 细节注入 | 32, 64, 128, 192 | 2, 4, 8, 2 | 9% | 2.34M | 5.38G |
+| `bb_r2.yaml` | 40, 80, 128, 176 | 2, 6, 6, 2 | 20% | 2.18M | 6.52G |
+| `bb_r3.yaml` | 48, 96, 128, 160 | 3, 6, 6, 2 | 29% | 2.28M | 8.40G |
+
+`train_candidates.py` 依次训练 `cand_bb_r2`、`cand_bb_r3`。
+
 ## 需要别的消融时
 
 去掉 P2、去掉 FPN、改 Transformer 层数、全局 top-k、随机路由等都仍然支持，

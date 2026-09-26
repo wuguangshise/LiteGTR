@@ -1,17 +1,16 @@
 """
-依次训练两个 P2 候选模型，确定新 main —— 直接运行即可（PyCharm 里点运行）
+依次训练两个主干候选，确定新 main —— 直接运行即可（PyCharm 里点运行）
 
     python train_candidates.py             按顺序训练：跑完一个再开始下一个
     python train_candidates.py --dry-run   只看每个候选的状态和将要执行的命令
 
 默认按顺序训练：
-    1. cand_writeback_p2_detail_inject   configs/ablation/writeback_p2_detail_inject.yaml
-       写回 P2 + 路由细节注入：路由掩码用两次（选 token、决定在哪里注入 stem 细节）
-    2. cand_writeback_p2                 configs/ablation/writeback_p2.yaml
-       写回 P2：路由掩码只用一次（选 token）
-
-两者只差细节注入一个变量：1 比 2 好，新 main 就是 1；否则细节注入没用，新 main 用 2。
-不写回 P2 的 main、只做细节注入的 cand_detail_inject 以后作为消融再训练。
+    1. cand_bb_r2   configs/ablation/bb_r2.yaml
+       主干 R2 [40,80,128,176] x [2,6,6,2]：容量挪到高分辨率（stride 4/8 占主干 20%，原来 9%）
+    2. cand_bb_r3   configs/ablation/bb_r3.yaml
+       主干 R3 [48,96,128,160] x [3,6,6,2]：高分辨率容量更多（29%）
+两个都在 写回 P2 + 路由细节注入 之上，P3 -> P2 改成带权相加（neck.p2_fusion: weighted），
+只差主干。
 
 已完成的目录会被跳过，而这里只比较模型、分配器和损失的配置，不看评价标准。
 评价标准改过、要全部重训时，先把 runs/train/ 下的旧目录改名或移走。
@@ -42,10 +41,8 @@ except Exception:
 # ======================== 只改这里 ========================
 # (输出目录名 NAME, 模型配置, 随机种子, 说明)；按这个顺序依次训练，NAME 别和 main 同名
 CANDIDATES = [
-    ("cand_writeback_p2_detail_inject", "configs/ablation/writeback_p2_detail_inject.yaml", 0,
-     "写回 P2 + 路由细节注入"),
-    ("cand_writeback_p2",               "configs/ablation/writeback_p2.yaml",               0,
-     "写回 P2"),
+    ("cand_bb_r2", "configs/ablation/bb_r2.yaml", 0, "主干 R2 + 带权 P2 融合 + 细节注入 + 写回 P2"),
+    ("cand_bb_r3", "configs/ablation/bb_r3.yaml", 0, "主干 R3 + 带权 P2 融合 + 细节注入 + 写回 P2"),
 ]
 # ===========================================================
 

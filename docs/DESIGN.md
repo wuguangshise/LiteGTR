@@ -368,6 +368,20 @@ covers 80% of the small-object P2 cells with 5.1% of the image (M > 0.3). A glob
 injection would mostly add background texture -- `detail_inject_global` is that control.
 Cost at 640: ~4.2K params, ~0.1G MACs, static ONNX. Conv stem only.
 
+### P0-9 Backbone capacity at high resolution; weighted P3 -> P2 merge (candidates)
+`configs/ablation/bb_r2.yaml`, `bb_r3.yaml`. Large and medium objects lead, small ones
+lag. The main TinyNeXt `[32,64,128,192] x [2,4,8,2]` holds 1% of its backbone parameters
+at stride 4, 8% at stride 8, 56% at 16 and 35% at 32 -- where a <16 px object (54% of
+VisDrone boxes) covers less than one cell. R2 `[40,80,128,176] x [2,6,6,2]` (20% at
+stride 4/8, 2.18M params, 6.52G MACs with writeback_p2 + detail_inject) and R3
+`[48,96,128,160] x [3,6,6,2]` (29%, 2.28M, 8.40G) move capacity up; main is 2.34M, 5.38G.
+Compute, not parameters, is the limit: high-resolution capacity costs MACs.
+
+Both also merge P3 into P2 with per-channel weights (`neck.p2_fusion: weighted`,
+EfficientDet's fast normalised fusion): `(w1 * lat(C2) + w2 * up(P3)) / (w1 + w2 + eps)`,
+`w = relu(.)` initialised to 1, instead of the plain sum that lays the coarse P3 -- one
+value over a whole tiny object -- on C2's detail with the same weight.
+
 ## 3. P1 — paper-level decisions
 
 ### P1-6 Pretraining: unified protocol, not a ban

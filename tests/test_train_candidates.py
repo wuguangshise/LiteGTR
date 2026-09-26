@@ -12,21 +12,24 @@ from models.build import load_config  # noqa: E402
 
 
 def test_candidates_in_order():
-    """Detail injection first, then the same model without it."""
     names = [c[0] for c in C.CANDIDATES]
-    assert names == ["cand_writeback_p2_detail_inject", "cand_writeback_p2"]
+    assert names == ["cand_bb_r2", "cand_bb_r3"]
     assert T.NAME not in names
 
 
-def test_candidates_differ_only_in_detail_injection():
+def test_candidates_differ_only_in_the_backbone():
     by = {n: load_config(C.REPO / cfg)["model"] for n, cfg, _, _ in C.CANDIDATES}
-    inj, ref = by["cand_writeback_p2_detail_inject"], by["cand_writeback_p2"]
-    di = inj.pop("detail_inject")
-    assert di["enabled"] and di["mask"] == "score" and di["source"] == "P3"
-    assert di["inject_at"] == "before_local"
-    assert not (ref.pop("detail_inject", None) or {}).get("enabled", False)
-    assert inj == ref
-    assert ref["token"]["writeback_levels"] == ["P2", "P3", "P4", "P5"]
+    r2, r3 = by["cand_bb_r2"], by["cand_bb_r3"]
+    assert (r2["backbone"]["channels"], r2["backbone"]["depths"]) == ([40, 80, 128, 176], [2, 6, 6, 2])
+    assert (r3["backbone"]["channels"], r3["backbone"]["depths"]) == ([48, 96, 128, 160], [3, 6, 6, 2])
+    for m in (r2, r3):
+        assert m["neck"]["p2_fusion"] == "weighted"
+        di = m["detail_inject"]
+        assert di["enabled"] and di["mask"] == "score" and di["inject_at"] == "before_local"
+        assert m["token"]["writeback_levels"] == ["P2", "P3", "P4", "P5"]
+        assert m["backbone"]["stem"] == "conv"
+    strip = lambda m: {**m, "backbone": {k: v for k, v in m["backbone"].items() if k not in ("channels", "depths")}}
+    assert strip(r2) == strip(r3)
 
 
 def test_training_script_accepts_each_candidate(monkeypatch):

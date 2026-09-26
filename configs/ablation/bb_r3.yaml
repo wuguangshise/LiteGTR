@@ -1,0 +1,8 @@
+# Candidate main model, backbone R3: as bb_r2.yaml, with more capacity at stride 4/8.
+# Stride 4/8 hold 29% of the backbone (main: 9%, R2: 20%). At 640: 2.28M params,
+# 8.40G MACs (main 2.34M, 5.38G), both with writeback_p2 + detail_inject.
+_base_: [bb_r2.yaml]
+model:
+  backbone:
+    channels: [48, 96, 128, 160]
+    depths: [3, 6, 6, 2]

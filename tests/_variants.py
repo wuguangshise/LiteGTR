@@ -29,6 +29,7 @@ VARIANTS: dict[str, dict] = {
                                              "token": {"writeback_levels": ["P2", "P3", "P4", "P5"]}}},
     "detail_inject_no_token": {"model": {"detail_inject": {"enabled": True, "mask": "global"},
                                          "token": {"enabled": False}}},
+    "p2_weighted_fusion": {"model": {"neck": {"p2_fusion": "weighted"}}},
     "budget_128": {"model": {"token": {"budget": {"P3": 64, "P4": 48, "P5": 16}}}},
     "mixer_none": {"model": {"token": {"mixer_layers": 0}}},
     "mixer_deep": {"model": {"token": {"mixer_layers": 2}}},

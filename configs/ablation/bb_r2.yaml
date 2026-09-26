@@ -1,0 +1,13 @@
+# Candidate main model, backbone R2: capacity moved to high resolution, plus a weighted
+# P3 -> P2 merge, on top of writeback_p2 + detail_inject.
+# The main TinyNeXt [32,64,128,192] x [2,4,8,2] puts 91% of its parameters at stride
+# 16/32, where a <16 px object (54% of VisDrone boxes) covers less than one cell. R2
+# gives stride 4/8 20% of the backbone (main: 9%). At 640: 2.18M params, 6.52G MACs
+# (main 2.34M, 5.38G), both with writeback_p2 + detail_inject.
+_base_: [writeback_p2_detail_inject.yaml]
+model:
+  backbone:
+    channels: [40, 80, 128, 176]
+    depths: [2, 6, 6, 2]
+  neck:
+    p2_fusion: weighted    # (w1 * lat(C2) + w2 * up(P3)) / (w1 + w2), per channel (BiFPN)

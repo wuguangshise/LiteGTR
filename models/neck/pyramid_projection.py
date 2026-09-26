@@ -37,10 +37,31 @@ class DWSepConv(nn.Module):
 
 
 class PyramidProjection(nn.Module):
-    def __init__(self, in_channels: list[int], out_channels: int = 64, use_fpn: bool = True):
+    """``p2_fusion`` sets how the top-down path merges the upsampled P3 into P2:
+
+    * ``add``      ``lat(C2) + up(P3)`` -- the plain FPN sum: the coarse P3, one value
+                   over a whole tiny object, lands on C2's detail with the same weight.
+    * ``weighted`` fast normalised fusion (EfficientDet / BiFPN, CVPR 2020), one pair of
+                   weights per channel: ``(w1 * lat(C2) + w2 * up(P3)) / (w1 + w2 + eps)``,
+                   ``w = relu(.)``, both initialised to 1. Each channel learns how much
+                   P3 context it takes instead of taking all of it.
+    """
+
+    def __init__(self, in_channels: list[int], out_channels: int = 64, use_fpn: bool = True,
+                 p2_fusion: str = "add"):
         super().__init__()
+        if p2_fusion not in ("add", "weighted"):
+            raise ValueError(f"unknown p2_fusion {p2_fusion!r} (expected 'add' or 'weighted')")
+        if p2_fusion != "add" and not use_fpn:
+            raise ValueError("p2_fusion needs the top-down path (use_fpn: true)")
         self.out_channels = out_channels
         self.use_fpn = use_fpn
+        self.p2_fusion = p2_fusion
+        if p2_fusion == "weighted":
+            # two 1-D vectors, not one (2, C) tensor: 1-D parameters are exempt from weight
+            # decay (engine/trainer.py), which would otherwise pull both weights to eps
+            self.p2_w_lat = nn.Parameter(torch.ones(out_channels))
+            self.p2_w_up = nn.Parameter(torch.ones(out_channels))
         self.lateral = nn.ModuleList(
             [nn.Sequential(nn.Conv2d(c, out_channels, 1, bias=False), LayerNorm2d(out_channels))
              for c in in_channels]
@@ -54,7 +75,13 @@ class PyramidProjection(nn.Module):
         if not self.use_fpn:
             return outs
         for i in range(len(outs) - 2, -1, -1):  # top-down: P5 -> P2
-            outs[i] = outs[i] + F.interpolate(outs[i + 1], size=outs[i].shape[-2:], mode="nearest")
+            up = F.interpolate(outs[i + 1], size=outs[i].shape[-2:], mode="nearest")
+            if i == 0 and self.p2_fusion == "weighted":
+                wl = F.relu(self.p2_w_lat).view(1, -1, 1, 1)
+                wu = F.relu(self.p2_w_up).view(1, -1, 1, 1)
+                outs[i] = (wl * outs[i] + wu * up) / (wl + wu + 1e-4)
+            else:
+                outs[i] = outs[i] + up
         return [s(o) for s, o in zip(self.smooth, outs)]
 
 
