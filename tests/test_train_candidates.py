@@ -11,15 +11,29 @@ import train_litegtr as T  # noqa: E402
 from models.build import load_config  # noqa: E402
 
 
-def test_candidates_in_order():
+def test_the_2x2_in_order():
     names = [c[0] for c in C.CANDIDATES]
-    assert names == ["cand_detail_inject", "cand_writeback_p2_detail_inject"]
+    assert names == ["main", "cand_writeback_p2", "cand_detail_inject", "cand_writeback_p2_detail_inject"]
     assert T.NAME not in names
+
+
+def test_main_entry_is_the_experiment_batch_main():
+    """Same NAME and config as run_experiments.py's main, so both scripts train -- and
+    skip or resume -- the same run directory."""
+    import run_experiments as R
+
+    batch = {n: (cfg, seed) for n, cfg, seed, _ in R.EXPERIMENTS}
+    mine = {n: (cfg, seed) for n, cfg, seed, _ in C.CANDIDATES}
+    assert mine["main"] == batch["main"]
 
 
 def test_candidate_configs_are_what_they_claim():
     by = {n: load_config(C.REPO / cfg)["model"] for n, cfg, _, _ in C.CANDIDATES}
-    for name in by:
+    for name in ("main", "cand_writeback_p2"):
+        assert not (by[name].get("detail_inject") or {}).get("enabled", False)
+    assert by["main"]["token"]["writeback_levels"] == ["P3", "P4", "P5"]
+    assert by["cand_writeback_p2"]["token"]["writeback_levels"] == ["P2", "P3", "P4", "P5"]
+    for name in ("cand_detail_inject", "cand_writeback_p2_detail_inject"):
         di = by[name]["detail_inject"]
         assert di["enabled"] and di["mask"] == "score" and di["source"] == "P3"
         assert di["inject_at"] == "before_local"

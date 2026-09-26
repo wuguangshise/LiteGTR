@@ -1,16 +1,23 @@
 """
-依次训练两个 P2 候选模型 —— 直接运行即可（PyCharm 里点运行）
+依次训练 P2 上的 2x2（上下文 x 细节）四个模型 —— 直接运行即可（PyCharm 里点运行）
 
     python train_candidates.py             按顺序训练：跑完一个再开始下一个
     python train_candidates.py --dry-run   只看每个候选的状态和将要执行的命令
 
 默认按顺序训练：
-    1. cand_detail_inject                configs/ablation/detail_inject.yaml
+    1. main                              configs/models/model_main.yaml
+       基准：不写回 P2、不做细节注入
+    2. cand_writeback_p2                 configs/ablation/writeback_p2.yaml
+       token 全局信息写回 P2
+    3. cand_detail_inject                configs/ablation/detail_inject.yaml
        路由细节注入：stem stride-2 的细节在打分图标出目标的地方注入 P2
-    2. cand_writeback_p2_detail_inject   configs/ablation/writeback_p2_detail_inject.yaml
-       路由细节注入 + token 全局信息写回 P2
+    4. cand_writeback_p2_detail_inject   configs/ablation/writeback_p2_detail_inject.yaml
+       路由细节注入 + 写回 P2
 
-对照用已经训练好的 main 和 cand_writeback_p2，四个一起构成 P2 上的 2x2（上下文 x 细节）。
+main 和 run_experiments.py 用同一个输出目录 runs/train/main/，两边训练的是同一个实验。
+
+已完成的目录会被跳过，而这里只比较模型、分配器和损失的配置，不看评价标准。
+评价标准改过、要全部重训时，先把 runs/train/ 下这四个旧目录改名或移走。
 
 一次只训练一个，显存和 CPU 占用和单独训练完全一样。
 
@@ -38,6 +45,10 @@ except Exception:
 # ======================== 只改这里 ========================
 # (输出目录名 NAME, 模型配置, 随机种子, 说明)；按这个顺序依次训练，NAME 别和 main 同名
 CANDIDATES = [
+    ("main",                            "configs/models/model_main.yaml",                   0,
+     "基准：不写回 P2、不做细节注入"),
+    ("cand_writeback_p2",               "configs/ablation/writeback_p2.yaml",               0,
+     "写回 P2"),
     ("cand_detail_inject",              "configs/ablation/detail_inject.yaml",              0,
      "路由细节注入 P2"),
     ("cand_writeback_p2_detail_inject", "configs/ablation/writeback_p2_detail_inject.yaml", 0,

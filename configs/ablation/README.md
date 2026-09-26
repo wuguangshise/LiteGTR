@@ -99,8 +99,8 @@ stem s2 → C2 → lat(C2) → FPN 后 P2 → 进 head 的 P2 依次是 0.99 →
 - `detail_inject_global.yaml`：全图注入，不用路由 —— 若和 `detail_inject` 一样好，增益来自早期细节本身，不是路由
 
 四格里 ✓✓ 的增益大于两个单项之和，才说明"一次路由，两处受益"。
-`train_candidates.py` 依次训练 `cand_detail_inject` 和 `cand_writeback_p2_detail_inject`，
-`main` 和 `cand_writeback_p2` 用已经训好的做对照。
+`train_candidates.py` 依次训练这四个（`main`、`cand_writeback_p2`、`cand_detail_inject`、
+`cand_writeback_p2_detail_inject`）。
 
 ## 需要别的消融时
 
